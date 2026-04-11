@@ -9,24 +9,31 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
-from recommender import load_songs, recommend_songs
+import json
+
+try:
+    from .recommender import load_songs, recommend_songs
+except ImportError:
+    from recommender import load_songs, recommend_songs
+
+# Change this to "jordan" or "sam" to see different recommendations.
+ACTIVE_USER = "alex"
 
 
 def main() -> None:
-    songs = load_songs("data/songs.csv") 
+    songs = load_songs("data/songs.csv")
 
-    # Starter example profile
-    user_prefs = {"genre": "pop", "mood": "happy", "energy": 0.8}
+    with open("data/users.json", "r", encoding="utf-8") as f:
+        profiles = json.load(f)
+
+    user_prefs = profiles[ACTIVE_USER]
 
     recommendations = recommend_songs(user_prefs, songs, k=5)
 
-    print("\nTop recommendations:\n")
-    for rec in recommendations:
-        # You decide the structure of each returned item.
-        # A common pattern is: (song, score, explanation)
-        song, score, explanation = rec
-        print(f"{song['title']} - Score: {score:.2f}")
-        print(f"Because: {explanation}")
+    print(f"\nTop recommendations for {ACTIVE_USER}:\n")
+    for song, score, explanation in recommendations:
+        print(f"{song['title']} by {song['artist']} - Score: {score:.2f}")
+        print(f"  {explanation}")
         print()
 
 
