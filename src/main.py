@@ -30,11 +30,16 @@ def main() -> None:
 
     recommendations = recommend_songs(user_prefs, songs, k=5)
 
-    print(f"\nTop recommendations for {ACTIVE_USER}:\n")
-    for song, score, explanation in recommendations:
-        print(f"{song['title']} by {song['artist']} - Score: {score:.2f}")
-        print(f"  {explanation}")
-        print()
+    print(f"\n{'='*70}")
+    print(f"🎵 TOP RECOMMENDATIONS FOR {ACTIVE_USER.upper()}")
+    print(f"{'='*70}\n")
+    
+    for idx, (song, score, explanation) in enumerate(recommendations, 1):
+        print(f"{idx}. {song['title']}")
+        print(f"   Artist: {song['artist']}")
+        print(f"   Score: {score:.2f}/100")
+        print(f"   Why: {explanation}")
+        print(f"{'-'*70}\n")
 
 
 if __name__ == "__main__":

@@ -84,10 +84,7 @@ class Recommender:
         return f"Recommended because {', '.join(reasons)}."
 
 def load_songs(csv_path: str) -> List[Dict]:
-    """
-    Loads songs from a CSV file.
-    Required by src/main.py
-    """
+    """Read songs.csv and return a list of dicts with numeric fields converted to int or float."""
     songs: List[Dict] = []
     with open(csv_path, "r", newline="", encoding="utf-8") as file:
         reader = csv.DictReader(file)
@@ -108,45 +105,77 @@ def load_songs(csv_path: str) -> List[Dict]:
             )
     return songs
 
+def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+    """Score one song against user preferences and return a (total_points, reasons) tuple."""
+    details = _song_score_details(user_prefs, song)
+    reasons: List[str] = []
+    score = 0.0
+
+    genre_pts = round(details["genre_score"] * 2.0, 2)
+    if genre_pts > 0:
+        reasons.append(f"genre match (+{genre_pts})")
+    score += genre_pts
+
+    mood_pts = round(details["mood_score"] * 1.5, 2)
+    if mood_pts >= 1.0:
+        reasons.append(f"mood match (+{mood_pts})")
+    score += mood_pts
+
+    energy_pts = round(details["energy_score"] * 1.0, 2)
+    if energy_pts >= 0.7:
+        reasons.append(f"energy match (+{energy_pts})")
+    score += energy_pts
+
+    acoustic_pts = round(details["acoustic_score"] * 0.5, 2)
+    if acoustic_pts >= 0.35:
+        reasons.append(f"acoustic style match (+{acoustic_pts})")
+    score += acoustic_pts
+
+    valence_pts = round(details["valence_score"] * 0.5, 2)
+    if valence_pts >= 0.35:
+        reasons.append(f"emotional tone match (+{valence_pts})")
+    score += valence_pts
+
+    if not reasons:
+        reasons.append("overall feature similarity")
+
+    return round(score, 4), reasons
+
 def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
-    """
-    Functional implementation of the recommendation logic.
-    Required by src/main.py
-    """
+    """Score every song, rank by score, and return the top k results with explanations."""
     if not songs:
         return []
 
     recent_artists = _extract_recent_artists(user_prefs)
 
-    scored: List[Tuple[Dict, float, Dict[str, float]]] = []
+    scored: List[Tuple[Dict, float, List[str]]] = []
     for song in songs:
-        details = _song_score_details(user_prefs, song)
-        score = details["final_score"]
+        score, reasons = score_song(user_prefs, song)
 
         # Soft novelty boost for artists not in recent listening history.
         if recent_artists and song.get("artist") not in recent_artists:
-            score += 0.02
+            score += 0.1
 
-        scored.append((song, min(score, 1.0), details))
+        scored.append((song, score, reasons))
 
     ranked = sorted(scored, key=lambda item: item[1], reverse=True)
 
     artist_counts: Dict[str, int] = {}
-    reranked: List[Tuple[Dict, float, Dict[str, float]]] = []
-    for song, score, details in ranked:
+    reranked: List[Tuple[Dict, float, List[str]]] = []
+    for song, score, reasons in ranked:
         artist = str(song.get("artist", ""))
         seen = artist_counts.get(artist, 0)
         diversity_penalty = 0.05 * seen
         adjusted = max(0.0, score - diversity_penalty)
         artist_counts[artist] = seen + 1
-        reranked.append((song, adjusted, details))
+        reranked.append((song, adjusted, reasons))
 
     reranked.sort(key=lambda item: item[1], reverse=True)
     top = reranked[:k]
 
     results: List[Tuple[Dict, float, str]] = []
-    for song, score, details in top:
-        explanation = _build_explanation(user_prefs, song, details)
+    for song, score, reasons in top:
+        explanation = "Recommended because " + ", ".join(reasons) + "."
         results.append((song, round(score, 4), explanation))
     return results
 
@@ -292,27 +321,6 @@ def _song_score_details(user_prefs: Dict, song: Dict) -> Dict[str, float]:
         "danceability_score": danceability_score,
         "final_score": final_score,
     }
-
-
-def _build_explanation(user_prefs: Dict, song: Dict, details: Dict[str, float]) -> str:
-    reasons: List[str] = []
-    if details["mood_score"] > 0.8:
-        reasons.append(f"mood matches ({song.get('mood', 'unknown')})")
-    if details["energy_score"] > 0.8:
-        reasons.append("energy level fits your vibe")
-    if details["acoustic_score"] > 0.8:
-        reasons.append("acoustic style fits your profile")
-    if details["valence_score"] > 0.8:
-        reasons.append("emotional tone aligns with what you're after")
-    if details["tempo_score"] > 0.8:
-        reasons.append("tempo is close to your target")
-    if details["genre_score"] > 0.8:
-        reasons.append(f"genre aligns ({song.get('genre', 'unknown')})")
-
-    if not reasons:
-        reasons.append("it is a strong overall match across multiple features")
-
-    return "Recommended because " + ", ".join(reasons) + "."
 
 
 def _score_song_structured(user: UserProfile, song: Song) -> float:
