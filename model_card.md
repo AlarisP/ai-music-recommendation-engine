@@ -71,7 +71,7 @@ Prompts:
 - User types for which it gives reasonable results  
     I would argue the output was reasonable for all five user profiles.
 - Any patterns you think your scoring captures correctly  
-    The persona that liked chill music (Alex) was spot-on — the jazz and lofi songs were scored well and the recommendations matched exactly what I would expect for that listener.
+    The persona that liked chill music (Alex) was spot-on, the jazz and lofi songs were scored well and the recommendations matched exactly what I would expect for that listener.
 - Cases where the recommendations matched your intuition  
     Jordan, the rock persona, matched my intuition well. The system consistently chose harder, more passionate songs with high energy and intensity, which is exactly what that profile called for.
 
@@ -103,7 +103,7 @@ Prompts:
 - Which user profiles you tested  
     I tested all 5 profiles. I ran all of them in simple mode and tested several in advanced mode as well.
 - What you looked for in the recommendations  
-    I looked for a clear rationale behind which songs were chosen, and for genre diversity within the top 5 — especially in advanced mode, where the goal is the same emotional vibe but from a variety of artists and styles.
+    I looked for a clear rationale behind which songs were chosen, and for genre diversity within the top 5, especially in advanced mode, where the goal is the same emotional vibe but from a variety of artists and styles.
 - What surprised you  
     I was surprised by how some of the same songs kept appearing across different users. I'm not sure whether that reflects genuine feature overlap in the catalog, or whether my own taste was unconsciously influencing how I judged which results were "correct."
 - Any simple tests or comparisons you ran  
@@ -120,7 +120,7 @@ Ideas for how you would improve the model next.
 Prompts:  
 
 - Additional features or preferences  
-    I would incorporate data from other users — for example, a social following feature that lets users see what people they follow are listening to, which feeds into collaborative filtering.
+    I would incorporate data from other users, for example, a social following feature that lets users see what people they follow are listening to, which feeds into collaborative filtering.
 
     I would also add a Discover mode that intentionally surfaces songs outside the user's normal patterns but that they might still enjoy, to break out of the recommendation echo chamber.
 
@@ -143,6 +143,6 @@ Prompts:
 - What you learned about recommender systems 
     There is a lot that goes into them, and it can feel like more data always means better results. That does raise real concerns about user autonomy and where the line is between helpful personalization and intrusive surveillance.
 - Something unexpected or interesting you discovered  
-    I thought it was interesting how the five user profiles were designed to be distinct, yet I still saw some song overlap between users with only partially similar tastes — and users at the polar ends of the spectrum shared no songs at all.
+    I thought it was interesting how the five user profiles were designed to be distinct, yet I still saw some song overlap between users with only partially similar tastes, and users at the polar ends of the spectrum shared no songs at all.
 - How this changed the way you think about music recommendation apps  
     It made me wonder just how much data streaming services actually collect and how precisely they use it, since they are essentially getting an unfiltered window into each person's emotional state over time.
