@@ -1,42 +1,36 @@
 flowchart TD
-    A[("songs.csv")] -->|load_songs| B["List of Song Dicts\n19 songs"]
-    C[("users.json")] -->|profiles[ACTIVE_USER]| D["user_prefs Dict"]
-    B & D --> E["recommend_songs()"]
+    A[data/songs.csv] --> B[load_songs]
+    B --> C[List of song dictionaries]
+    D[src/main.py USER_PROFILES ACTIVE_USER] --> E[user_prefs]
+    C --> F[recommend_songs user_prefs songs k]
+    E --> F
 
-    subgraph SCORE ["_song_score_details() — runs once per song"]
-        direction TB
-        F1["genre_score\nexact=1.0 · fallback 0.9/0.8 · miss=0.0"]
-        F2["mood_score\n2D euclidean distance / 2.83"]
-        F3["energy_score\n1 − |Δenergy| / 1.0"]
-        F4["tempo_score\n1 − |Δtempo| / 80"]
-        F5["valence_score\n1 − |Δvalence| / 1.0"]
-        F6["acoustic_score\n1 − |Δacoustic| / 1.0"]
-        F7["dance_score\n1 − |Δdance| / 1.0"]
+    F --> G[for each song]
+    G --> H[_song_score_details computes similarities]
+    H --> I[genre mood energy acoustic valence similarities]
+    I --> J[score_song points]
 
-        F2 & F5 --> G1["FEEL\n0.65 × mood + 0.35 × valence"]
-        F3 & F4 --> G2["INTENSITY\n0.70 × energy + 0.30 × tempo"]
-        F6 & F1 --> G3["STYLE\n0.55 × acoustic + 0.45 × genre"]
-        F7 --> G4["GROOVE = dance_score"]
+    J --> J1[genre points = 2.0 * genre_score]
+    J --> J2[mood points = 1.5 * mood_score]
+    J --> J3[energy points = 1.0 * energy_score]
+    J --> J4[acoustic points = 0.5 * acoustic_score]
+    J --> J5[valence points = 0.5 * valence_score]
 
-        G1 & G2 & G3 & G4 --> WS["Weighted Sum\n0.38×FEEL + 0.30×INTENSITY + 0.22×STYLE + 0.10×GROOVE"]
+    J1 --> K[base score]
+    J2 --> K
+    J3 --> K
+    J4 --> K
+    J5 --> K
 
-        WS --> MG{"mood_distance > 1.8?"}
-        MG -->|Yes — near-opposite vibe| MGA["final ×= max(0.5, gate multiplier)"]
-        MG -->|No| MGN["score passes through"]
-        MGA & MGN --> FS["final_score  0.0 – 1.0"]
-    end
+    K --> N{recent_songs exists and artist not recent}
+    N -->|yes| O[add 0.1 novelty bonus]
+    N -->|no| P[keep base score]
+    O --> Q[append scored row]
+    P --> Q
 
-    E -->|for each of 19 songs| SCORE
-
-    FS --> NB{"artist in\nrecent_songs?"}
-    NB -->|No — new artist| NBA["+ 0.02 novelty boost"]
-    NB -->|Yes| NBN["no change"]
-    NBA & NBN --> CAP["cap at 1.0"]
-
-    CAP --> COL["19 scored songs collected"]
-    COL --> S1["sort descending"]
-    S1 --> DIV["artist diversity pass\n− 0.05 per repeated artist seen so far"]
-    DIV --> S2["re-sort descending"]
-    S2 --> TOPK["slice top k"]
-    TOPK --> EXP["_build_explanation()\nflag any component score > 0.8"]
-    EXP --> OUT[/"title · score · reason"/]
+    Q --> R[sort scored rows descending]
+    R --> S[artist diversity pass subtract 0.05 per seen artist]
+    S --> T[re-sort descending]
+    T --> U[slice top k]
+    U --> V[build explanation from reasons]
+    V --> W[return list song score explanation]

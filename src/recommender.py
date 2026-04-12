@@ -141,16 +141,46 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
 
     return round(score, 4), reasons
 
-def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
-    """Score every song, rank by score, and return the top k results with explanations."""
+def _advanced_score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+    """Score one song using the grouped FEEL/INTENSITY/STYLE/GROOVE formula with mood gate."""
+    details = _song_score_details(user_prefs, song)
+    score = details["final_score"]
+
+    reasons: List[str] = []
+    if details["genre_score"] > 0.95:
+        reasons.append(f"genre matches your preference ({song.get('genre')})")
+    elif details["genre_score"] >= 0.5:
+        reasons.append(f"genre is close to your taste ({song.get('genre')})")
+    if details["mood_score"] > 0.80:
+        reasons.append(f"mood aligns well ({song.get('mood')})")
+    if details["energy_score"] > 0.80:
+        reasons.append("energy level fits your vibe")
+    if details["acoustic_score"] > 0.80:
+        reasons.append("acoustic style matches your profile")
+    if details["valence_score"] > 0.80:
+        reasons.append("emotional tone aligns with what you're after")
+    if not reasons:
+        reasons.append("overall feature similarity is strong")
+
+    return round(score, 4), reasons
+
+
+def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5, mode: str = "simple") -> List[Tuple[Dict, float, str]]:
+    """Score every song, rank by score, and return the top k results with explanations.
+
+    mode="simple"   — additive weighted sum (genre×2, mood×1.5, energy×1, …)
+    mode="advanced" — grouped FEEL/INTENSITY/STYLE/GROOVE weights with mood gate penalty
+    """
     if not songs:
         return []
 
     recent_artists = _extract_recent_artists(user_prefs)
 
+    scorer = score_song if mode == "simple" else _advanced_score_song
+
     scored: List[Tuple[Dict, float, List[str]]] = []
     for song in songs:
-        score, reasons = score_song(user_prefs, song)
+        score, reasons = scorer(user_prefs, song)
 
         # Soft novelty boost for artists not in recent listening history.
         if recent_artists and song.get("artist") not in recent_artists:
@@ -161,13 +191,19 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
     ranked = sorted(scored, key=lambda item: item[1], reverse=True)
 
     artist_counts: Dict[str, int] = {}
+    genre_counts: Dict[str, int] = {}
     reranked: List[Tuple[Dict, float, List[str]]] = []
     for song, score, reasons in ranked:
         artist = str(song.get("artist", ""))
-        seen = artist_counts.get(artist, 0)
-        diversity_penalty = 0.05 * seen
+        genre = str(song.get("genre", ""))
+        artist_seen = artist_counts.get(artist, 0)
+        genre_seen = genre_counts.get(genre, 0)
+        # Artist penalty: -0.05 per prior occurrence (same artist dominates less)
+        # Genre penalty:  -0.03 per prior occurrence (softer — genres are broader)
+        diversity_penalty = 0.05 * artist_seen + 0.03 * genre_seen
         adjusted = max(0.0, score - diversity_penalty)
-        artist_counts[artist] = seen + 1
+        artist_counts[artist] = artist_seen + 1
+        genre_counts[genre] = genre_seen + 1
         reranked.append((song, adjusted, reasons))
 
     reranked.sort(key=lambda item: item[1], reverse=True)
