@@ -1,0 +1,24 @@
+flowchart LR
+    subgraph INPUT[Input]
+        A[User Profile Source<br/>target mood, genre, energy, tempo, acoustic preference]
+        B[Song Dataset Source<br/>docs/data/songs.json + docs/data/profiles.json]
+    end
+
+    subgraph CORE[AI Recommendation Pipeline]
+        C[Feature Retriever]
+        D[Scoring Agent<br/>mood distance, energy difference,<br/>genre flags, tempo difference, acoustic match]
+        E[Feedback Integrator<br/>seed feedback + live likes and skips]
+        F[Evaluator and Guardrails<br/>confidence and score-spread checks]
+    end
+
+    subgraph OUTPUT[Output]
+        G[Top 5 Recommendations<br/>scores + explanations]
+    end
+
+    A --> C
+    B --> C
+    C --> D --> E --> F --> G
+
+    G -->|shown to user| H
+    H[Human User] -->|Like or Skip| E
+    T[Testing Layer<br/>manual checks + pytest] -->|validates ranking behavior| F

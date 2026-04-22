@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Music Recommender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero card">
+      <p class="eyebrow">GitHub Pages Ready</p>
+      <h1>AI Music Recommender</h1>
+      <p>
+        This demo uses feature-based AI scoring plus feedback learning in-browser.
+        No backend required.
+      </p>
+    </section>
+
+    <section class="controls card">
+      <div class="control-grid">
+        <label>
+          Profile
+          <select id="profileSelect"></select>
+        </label>
+
+        <label>
+          Target mood
+          <select id="moodSelect"></select>
+        </label>
+
+        <label>
+          Target genre
+          <select id="genreSelect"></select>
+        </label>
+
+        <label>
+          Target energy
+          <input id="energyInput" type="range" min="0" max="1" step="0.01">
+          <span id="energyValue" class="value-chip"></span>
+        </label>
+
+        <label>
+          Target tempo BPM
+          <input id="tempoInput" type="range" min="58" max="168" step="1">
+          <span id="tempoValue" class="value-chip"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span>Prefer acoustic</span>
+          <input id="acousticInput" type="checkbox">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="recommendButton" class="btn btn-primary">Recommend Top 5</button>
+        <button id="resetButton" class="btn btn-secondary">Reset Local Feedback</button>
+      </div>
+    </section>
+
+    <section class="results card">
+      <div class="results-header">
+        <h2>Recommendations</h2>
+        <p id="statusText"></p>
+      </div>
+      <div id="resultsContainer"></div>
+    </section>
+
+    <section class="logs card">
+      <h2>Logs and Guardrails</h2>
+      <ul id="logList"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

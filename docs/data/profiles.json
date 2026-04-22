@@ -1,0 +1,102 @@
+[
+  {
+    "id": "alex",
+    "name": "Alex",
+    "genre": "lofi",
+    "mood": "chill",
+    "energy": 0.35,
+    "tempo_bpm": 75,
+    "likes_acoustic": true,
+    "favorite_genres": ["lofi", "ambient", "jazz"],
+    "feedback_events": [
+      {"song_id": 2, "action": "like"},
+      {"song_id": 4, "action": "like"},
+      {"song_id": 7, "action": "like"},
+      {"song_id": 9, "action": "like"},
+      {"song_id": 6, "action": "like"},
+      {"song_id": 13, "action": "skip"},
+      {"song_id": 12, "action": "skip"},
+      {"song_id": 5, "action": "skip"}
+    ]
+  },
+  {
+    "id": "maya",
+    "name": "Maya",
+    "genre": "pop",
+    "mood": "excited",
+    "energy": 0.92,
+    "tempo_bpm": 132,
+    "likes_acoustic": false,
+    "favorite_genres": ["pop", "hip-hop", "edm"],
+    "feedback_events": [
+      {"song_id": 1, "action": "like"},
+      {"song_id": 5, "action": "like"},
+      {"song_id": 12, "action": "like"},
+      {"song_id": 16, "action": "like"},
+      {"song_id": 19, "action": "like"},
+      {"song_id": 11, "action": "skip"},
+      {"song_id": 15, "action": "skip"},
+      {"song_id": 4, "action": "skip"}
+    ]
+  },
+  {
+    "id": "jordan",
+    "name": "Jordan",
+    "genre": "rock",
+    "mood": "intense",
+    "energy": 0.93,
+    "tempo_bpm": 155,
+    "likes_acoustic": false,
+    "favorite_genres": ["rock", "metal", "blues"],
+    "feedback_events": [
+      {"song_id": 3, "action": "like"},
+      {"song_id": 13, "action": "like"},
+      {"song_id": 5, "action": "like"},
+      {"song_id": 19, "action": "like"},
+      {"song_id": 18, "action": "like"},
+      {"song_id": 2, "action": "skip"},
+      {"song_id": 6, "action": "skip"},
+      {"song_id": 15, "action": "skip"}
+    ]
+  },
+  {
+    "id": "sam",
+    "name": "Sam",
+    "genre": "k-pop",
+    "mood": "excited",
+    "energy": 0.88,
+    "tempo_bpm": 138,
+    "likes_acoustic": false,
+    "favorite_genres": ["k-pop", "pop", "hip-hop", "edm"],
+    "feedback_events": [
+      {"song_id": 19, "action": "like"},
+      {"song_id": 1, "action": "like"},
+      {"song_id": 16, "action": "like"},
+      {"song_id": 12, "action": "like"},
+      {"song_id": 10, "action": "like"},
+      {"song_id": 11, "action": "skip"},
+      {"song_id": 15, "action": "skip"},
+      {"song_id": 18, "action": "skip"}
+    ]
+  },
+  {
+    "id": "riley",
+    "name": "Riley",
+    "genre": "edm",
+    "mood": "sad",
+    "energy": 0.95,
+    "tempo_bpm": 140,
+    "likes_acoustic": true,
+    "favorite_genres": ["edm", "classical", "ambient"],
+    "feedback_events": [
+      {"song_id": 12, "action": "like"},
+      {"song_id": 3, "action": "like"},
+      {"song_id": 15, "action": "like"},
+      {"song_id": 11, "action": "like"},
+      {"song_id": 6, "action": "like"},
+      {"song_id": 1, "action": "skip"},
+      {"song_id": 16, "action": "skip"},
+      {"song_id": 5, "action": "skip"}
+    ]
+  }
+]

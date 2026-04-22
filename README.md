@@ -1,7 +1,6 @@
 # Music Recommender Simulation
 
 ---
-![alt text](image.png)
 ## Project Summary
 
 This project builds a small content-based music recommender system. Given a user taste profile, it scores every song in a catalog and returns the top matches — ranked by how closely each song fits what the user wants right now.
@@ -71,7 +70,18 @@ This is the exact sequence of steps the program follows to turn a user profile i
 
 **Overview:**
 
-![alt text](image.png)
+See the short system diagram below for the full input -> process -> output flow.
+
+### Short System Diagram
+
+Diagram source: `Assets/system_diagram.mmd`
+
+![System diagram](Assets/image.png)
+This diagram shows:
+
+- main components (`Feature Retriever`, `Scoring Agent`, `Evaluator and Guardrails`, `Testing Layer`)
+- data flow (`User Input -> Retriever -> Scoring -> Feedback -> Evaluator -> Output`)
+- where humans and testing validate AI behavior (`Human User` feedback loop and `Testing Layer` checks)
 
 #### Proximity Scoring for Numerical Features
 
@@ -206,6 +216,39 @@ After the base score is computed, both modes apply the same two adjustments:
 
 ## Getting Started
 
+### GitHub Pages Web App (No Backend)
+
+This project now includes a browser-based recommender in `docs/` that can be deployed on GitHub Pages.
+
+The web app scores songs using these core signals:
+
+- user mood vs song mood distance
+- user target energy vs song energy difference
+- genre match flags
+- tempo difference
+- acoustic preference match
+
+It also applies **user feedback learning** from seed profile events (`like`/`skip`) plus live feedback buttons in the UI. Feedback is stored in browser local storage and changes rankings immediately.
+
+#### Deploy to GitHub Pages
+
+1. Push the repository to GitHub.
+2. Go to **Settings → Pages**.
+3. Under **Build and deployment**, choose:
+   - **Source**: Deploy from a branch
+   - **Branch**: `main`
+   - **Folder**: `/docs`
+4. Save, then wait for GitHub Pages to publish.
+5. Open the published URL and use the profile selector to test recommendations.
+
+#### Files used by the web app
+
+- `docs/index.html` - UI
+- `docs/app.js` - scoring logic, feedback integration, and guardrails
+- `docs/styles.css` - styling
+- `docs/data/songs.json` - song catalog used by the browser app
+- `docs/data/profiles.json` - in-depth example profiles with fake feedback histories
+
 ### Setup
 
 1. Create a virtual environment (optional but recommended):
@@ -227,8 +270,6 @@ After the base score is computed, both modes apply the same two adjustments:
    ```bash
    python -m src.main
    ```
-Example output:
-![alt text](image-1.png)
 
 ### Running Tests
 
@@ -278,13 +319,7 @@ Write 1–2 paragraphs here about what you learned:
    In the current CLI ranking path, genre has a large direct weight (2.0) and mood is also strong (1.5). That means the system can still reinforce a user's current state, perhaps leading to spirals. It can favor familiar genres and adjacent moods at the same time, reducing cross-genre exploration. 
 
 
-#### Screen shots of user's output: Simple mode
-![alt text](image-2.png)
-![alt text](image-1.png)
-![alt text](image-3.png)
-![alt text](image-4.png)
-![alt text](image-5.png)
+#### Sample Output Notes
 
-#### Some Example Screen shots of user's output: Advanced mode
-![alt text](image-6.png)
-![alt text](image-9.png)
+- Simple mode emphasizes direct feature weights.
+- Advanced mode applies grouped scoring with mood guardrails.
