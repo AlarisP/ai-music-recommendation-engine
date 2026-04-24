@@ -9,6 +9,12 @@ The system is built around a single core idea: **proximity scoring**. Instead of
 
 User profiles are currently defined in [src/main.py](src/main.py) under `USER_PROFILES`. Switching the `ACTIVE_USER` variable in [src/main.py](src/main.py) runs the recommender for a different person and produces a different set of results. A second variable, `SCORING_MODE`, lets you choose between two different ranking algorithms without touching any other code.
 
+The core recommendation stack now includes [src/scorers.py](src/scorers.py), [src/ai_model.py](src/ai_model.py), and [src/recommender.py](src/recommender.py). The `Recommender` class defaults to `advanced` mode, but you can still switch to `simple` when you want the lighter weighted-sum version. A feedback-trained logistic regression model is blended into ranking, so the project now has a real learned AI component rather than only handcrafted rules.
+
+### Original Module 1-3 Base Project
+
+This final system extends the earlier "Music Recommender Simulation" prototype from Modules 1-3. The original version focused on deterministic, feature-based ranking of songs using user preferences for genre, mood, and energy, with no trained model layer. The current version preserves that explainable baseline, then upgrades it with a learned preference model, explicit guardrails, and a reliability evaluation harness.
+
 ---
 
 ## How The System Works
@@ -61,6 +67,8 @@ SCORING_MODE = "advanced"  # grouped dimensions + mood gate penalty
 ```
 
 See [Scoring Modes](#scoring-modes) below for a full comparison.
+
+If you are using the OOP API directly, `Recommender(songs)` defaults to `advanced` mode. Pass `mode="simple"` to use the additive scorer instead.
 
 ---
 
@@ -220,7 +228,7 @@ After the base score is computed, both modes apply the same two adjustments:
 
 This project now includes a browser-based recommender in `docs/` that can be deployed on GitHub Pages.
 
-The web app scores songs using these core signals:
+The web app scores songs using these core signals and also loads the exported learned model in `docs/data/preference_model.json`:
 
 - user mood vs song mood distance
 - user target energy vs song energy difference
@@ -228,7 +236,7 @@ The web app scores songs using these core signals:
 - tempo difference
 - acoustic preference match
 
-It also applies **user feedback learning** from seed profile events (`like`/`skip`) plus live feedback buttons in the UI. Feedback is stored in browser local storage and changes rankings immediately.
+It also applies **user feedback learning** from seed profile events (`like`/`skip`) plus live feedback buttons in the UI. Feedback is stored in browser local storage and the exported model confidence is blended into the ranking.
 
 #### Deploy to GitHub Pages
 
@@ -244,10 +252,11 @@ It also applies **user feedback learning** from seed profile events (`like`/`ski
 #### Files used by the web app
 
 - `docs/index.html` - UI
-- `docs/app.js` - scoring logic, feedback integration, and guardrails
+- `docs/app.js` - scoring logic, feedback integration, guardrails, and learned-model inference
 - `docs/styles.css` - styling
 - `docs/data/songs.json` - song catalog used by the browser app
 - `docs/data/profiles.json` - in-depth example profiles with fake feedback histories
+- `docs/data/preference_model.json` - exported trained model used by the browser app
 
 ### Setup
 
@@ -277,7 +286,15 @@ It also applies **user feedback learning** from seed profile events (`like`/`ski
 pytest
 ```
 
-You can add more tests in `tests/test_recommender.py`.
+The test suite covers both scoring modes, invalid mode handling, and the OOP wrapper in `tests/test_recommender.py`.
+
+### Run Reliability Evaluation Harness
+
+```bash
+python -m src.evaluate
+```
+
+This command runs scenario checks, model-behavior checks, and guardrail checks, then writes a machine-readable report to `logs/evaluation_report.json`.
 
 ---
 
@@ -299,7 +316,7 @@ Use this section to document experiments. For example:
 - **No collaborative signal**: the system never learns from what other users liked; it can only match attributes, not discover cross-genre surprises
 - **Cold start on new songs**: a newly added song with no listening history gets no boost from popularity or engagement
 - **Correlated features**: energy and acousticness are inversely correlated in this dataset, so they partially double-count the same information
-- **Fixed weights**: the same weights apply to every user; a user who cares deeply about genre but not tempo gets no way to express that
+- **Small learned dataset**: the trained model is based on a limited set of synthetic feedback examples, so it is useful for a demo but not a production recommender yet
 
 ### Weakness Discovered During Experiments
 
@@ -314,7 +331,7 @@ Read and complete [model_card.md](model_card.md).
 Write 1–2 paragraphs here about what you learned:
 
 - About how recommenders turn data into predictions
-   The human emotions that a user wants to feel get turned into numeric data on a 2D scale where the song's emotion becomes it's own coordinate in advanced mode. There is also a mood gate in place to override, when past a certain emotional distance no amount of matching on the other features is enough. Note, this system can't improve since it doesn't include learning and has the algorithm set in stone, it also can't learn from what other users similar to you like.
+   The human emotions that a user wants to feel get turned into numeric data on a 2D scale where the song's emotion becomes its own coordinate in advanced mode. There is also a mood gate in place to override, when past a certain emotional distance no amount of matching on the other features is enough. The new learned model also lets the system improve from labeled like/skip examples, although the current training set is still intentionally small and synthetic.
 - About where bias or unfairness could show up in systems like this
    In the current CLI ranking path, genre has a large direct weight (2.0) and mood is also strong (1.5). That means the system can still reinforce a user's current state, perhaps leading to spirals. It can favor familiar genres and adjacent moods at the same time, reducing cross-genre exploration. 
 
@@ -323,3 +340,77 @@ Write 1–2 paragraphs here about what you learned:
 
 - Simple mode emphasizes direct feature weights.
 - Advanced mode applies grouped scoring with mood guardrails.
+
+---
+
+## Sample Interactions
+
+These examples show end-to-end recommendation outputs from the current hybrid scorer.
+
+### Example 1
+
+Input:
+- Profile: `alex`
+- Mode: `advanced`
+- k: `3`
+
+Output:
+- `Library Rain` (0.995)
+- `Spacewalk Thoughts` (0.964)
+- `Coffee Shop Stories` (0.961)
+
+### Example 2
+
+Input:
+- Profile: `maya`
+- Mode: `simple`
+- k: `3`
+
+Output:
+- `Gym Hero` (0.983)
+- `Neon Surge` (0.950)
+- `Sunrise City` (0.937)
+
+### Example 3
+
+Input:
+- Profile: `riley` (adversarial profile)
+- Mode: `advanced`
+- k: `3`
+
+Output:
+- `Rust Belt Hymn` (0.841)
+- `Empty Porch` (0.823)
+- `Morning Aria` (0.765)
+
+## Testing Summary
+
+Latest run summary:
+
+- `pytest -q`: 7/7 tests passed
+- `python -m src.evaluate`: 5/5 reliability checks passed
+- Average model confidence across evaluated recommendations: 0.941
+- Guardrail behavior: invalid user payload (missing required fields) correctly raised `ValueError`
+
+What worked:
+- Both scoring modes returned bounded, non-empty recommendations.
+- Learned model probabilities ordered "liked" songs above "skipped" songs in evaluation scenarios.
+- Runtime guardrails prevented malformed profile inputs from silently producing low-quality outputs.
+
+What did not work or remains limited:
+- The learned model still depends on a small synthetic training set, so confidence can be over-optimistic outside covered profile patterns.
+
+## Design Decisions and Trade-offs
+
+- Kept deterministic feature scoring for explainability, then blended in learned confidence for adaptability.
+- Added strict profile validation guardrails for reliability, accepting that malformed requests now fail fast instead of being loosely coerced.
+- Used a lightweight logistic regression model for transparent coefficients and browser exportability, trading off deep-model expressiveness.
+
+## Loom Walkthrough
+
+- Add your required walkthrough link here: `LOOM_LINK_HERE`
+- The video should show: 2-3 inputs, AI feature behavior, reliability/guardrail behavior, and clear outputs.
+
+## Portfolio Reflection Snippet
+
+This project demonstrates that I can move from prototype rules to a production-style applied AI workflow: modular model logic, guardrails, quantitative evaluation, and clear communication of limitations. It reflects an engineering style that values measurable reliability and explainable decision paths, not only output quality.

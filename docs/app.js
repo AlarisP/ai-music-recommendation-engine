@@ -14,8 +14,33 @@ const state = {
   songs: [],
   profiles: [],
   songById: new Map(),
+  learnedModel: null,
   activeProfile: null,
   logs: []
+};
+
+const TARGET_VALENCE_BY_MOOD = {
+  happy: 0.80,
+  excited: 0.85,
+  chill: 0.60,
+  focused: 0.55,
+  intense: 0.45,
+  moody: 0.35,
+  relaxed: 0.65,
+  sad: 0.20,
+  angry: 0.20
+};
+
+const TARGET_DANCEABILITY_BY_MOOD = {
+  happy: 0.80,
+  excited: 0.85,
+  chill: 0.60,
+  focused: 0.58,
+  relaxed: 0.52,
+  moody: 0.50,
+  intense: 0.62,
+  sad: 0.35,
+  angry: 0.65
 };
 
 const profileSelect = document.getElementById("profileSelect");
@@ -149,6 +174,28 @@ function feedbackAdjustment(profile, song) {
   };
 }
 
+function buildLearnedFeatureVector(profile, song) {
+  return [
+    genreMatchScore(profile.genre, song.genre, profile.favorite_genres || []),
+    moodSimilarity(profile.mood, song.mood),
+    normalizedSimilarity(Number(profile.tempo_bpm || 100), Number(song.tempo_bpm), 80),
+    normalizedSimilarity(Number(profile.energy || 0.6), Number(song.energy), 1),
+    normalizedSimilarity(profile.likes_acoustic ? 0.8 : 0.2, Number(song.acousticness), 1),
+    normalizedSimilarity(TARGET_VALENCE_BY_MOOD[(profile.mood || "").toLowerCase()] ?? 0.55, Number(song.valence), 1),
+    normalizedSimilarity(TARGET_DANCEABILITY_BY_MOOD[(profile.mood || "").toLowerCase()] ?? 0.60, Number(song.danceability), 1)
+  ];
+}
+
+function predictLearnedProbability(model, features) {
+  if (!model) {
+    return null;
+  }
+
+  const standardized = features.map((value, index) => (value - model.means[index]) / model.scales[index]);
+  const logit = standardized.reduce((sum, value, index) => sum + value * model.coefficients[index], model.intercept);
+  return 1 / (1 + Math.exp(-logit));
+}
+
 function scoreSong(profile, song, feedbackCap = 0.35) {
   const targetMood = moodSelect.value;
   const targetGenre = genreSelect.value;
@@ -172,11 +219,28 @@ function scoreSong(profile, song, feedbackCap = 0.35) {
 
   const feedback = feedbackAdjustment(profile, song);
   const cappedFeedback = clamp(feedback.total, -feedbackCap, feedbackCap);
-  const final = clamp(base + cappedFeedback, 0, 1);
+  const heuristicScore = clamp(base + cappedFeedback, 0, 1);
+
+  const learnedFeatures = buildLearnedFeatureVector(
+    {
+      ...profile,
+      genre: targetGenre,
+      mood: targetMood,
+      energy: targetEnergy,
+      tempo_bpm: targetTempo,
+      likes_acoustic: likesAcoustic
+    },
+    song
+  );
+  const learnedProbability = predictLearnedProbability(state.learnedModel, learnedFeatures);
+  const final = learnedProbability === null
+    ? heuristicScore
+    : clamp(0.7 * learnedProbability + 0.3 * heuristicScore, 0, 1);
 
   return {
     score: final,
     base,
+    learnedProbability,
     components: {
       moodScore,
       energyScore,
@@ -239,6 +303,14 @@ function recommendationReason(row) {
   }
   if (c.feedback < -0.06) {
     parts.push("feedback history penalizes this song");
+  }
+
+  if (typeof row.scored.learnedProbability === "number") {
+    if (row.scored.learnedProbability >= 0.75) {
+      parts.push("learned model strongly predicts a like");
+    } else if (row.scored.learnedProbability >= 0.5) {
+      parts.push("learned model sees a moderate fit");
+    }
   }
 
   if (parts.length === 0) {
@@ -378,9 +450,10 @@ function resetFeedbackForActiveProfile() {
 
 async function loadData() {
   try {
-    const [songRes, profileRes] = await Promise.all([
+    const [songRes, profileRes, modelRes] = await Promise.all([
       fetch("data/songs.json"),
-      fetch("data/profiles.json")
+      fetch("data/profiles.json"),
+      fetch("data/preference_model.json")
     ]);
 
     if (!songRes.ok || !profileRes.ok) {
@@ -390,6 +463,14 @@ async function loadData() {
     state.songs = await songRes.json();
     state.profiles = await profileRes.json();
     state.songById = new Map(state.songs.map((song) => [song.id, song]));
+
+    if (modelRes && modelRes.ok) {
+      state.learnedModel = await modelRes.json();
+      logEvent("Learned feedback model loaded successfully.", false);
+    } else {
+      state.learnedModel = null;
+      logEvent("Learned feedback model unavailable; using heuristic fallback.", true);
+    }
 
     profileSelect.innerHTML = state.profiles
       .map((profile) => `<option value="${profile.id}">${profile.name}</option>`)

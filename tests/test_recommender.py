@@ -1,4 +1,6 @@
-from src.recommender import Song, UserProfile, Recommender
+import pytest
+
+from src.recommender import Song, UserProfile, Recommender, recommend_songs
 
 def make_small_recommender() -> Recommender:
     songs = [
@@ -30,6 +32,36 @@ def make_small_recommender() -> Recommender:
     return Recommender(songs)
 
 
+def test_recommend_defaults_to_advanced_mode():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = make_small_recommender()
+
+    results = rec.recommend(user, k=1)
+
+    assert len(results) == 1
+    assert results[0].genre == "pop"
+
+
+def test_recommend_supports_simple_mode():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+    rec = make_small_recommender()
+
+    results = rec.recommend(user, k=1, mode="simple")
+
+    assert len(results) == 1
+    assert results[0].genre == "pop"
+
+
 def test_recommend_returns_songs_sorted_by_score():
     user = UserProfile(
         favorite_genre="pop",
@@ -59,3 +91,43 @@ def test_explain_recommendation_returns_non_empty_string():
     explanation = rec.explain_recommendation(user, song)
     assert isinstance(explanation, str)
     assert explanation.strip() != ""
+
+
+def test_invalid_mode_raises_value_error():
+    user = UserProfile(
+        favorite_genre="pop",
+        favorite_mood="happy",
+        target_energy=0.8,
+        likes_acoustic=False,
+    )
+
+    rec = Recommender([], mode="advanced")
+
+    with pytest.raises(ValueError):
+        rec.recommend(user, mode="not-a-real-mode")
+
+
+def test_recommend_songs_missing_required_user_fields_raises_value_error():
+    songs = [
+        {
+            "id": 1,
+            "title": "Minimal Track",
+            "artist": "Sample Artist",
+            "genre": "pop",
+            "mood": "happy",
+            "energy": 0.7,
+            "tempo_bpm": 118.0,
+            "valence": 0.8,
+            "danceability": 0.75,
+            "acousticness": 0.2,
+        }
+    ]
+
+    invalid_user_profile = {
+        "genre": "pop",
+        "energy": 0.8,
+        "likes_acoustic": False,
+    }
+
+    with pytest.raises(ValueError):
+        recommend_songs(invalid_user_profile, songs, k=1, mode="advanced")

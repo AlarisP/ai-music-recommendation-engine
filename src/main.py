@@ -102,9 +102,9 @@ def main() -> None:
 
     recommendations = recommend_songs(user_prefs, songs, k=5, mode=SCORING_MODE)
 
-    score_scale = "max ~5.5" if SCORING_MODE == "simple" else "max 1.0"
+    score_scale = "AI-assisted 0-1 blended score"
     print(f"\n{'='*70}")
-    print(f"  TOP RECOMMENDATIONS FOR: {ACTIVE_USER.capitalize()}  [{SCORING_MODE.upper()} scoring | score {score_scale}]")
+    print(f"  TOP RECOMMENDATIONS FOR: {ACTIVE_USER.capitalize()}  [{SCORING_MODE.upper()} scoring | {score_scale}]")
     print(f"{'='*70}\n")
 
     rows = []

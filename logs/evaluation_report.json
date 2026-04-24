@@ -1,0 +1,33 @@
+{
+  "total_checks": 5,
+  "passed": 5,
+  "failed": 0,
+  "average_confidence": 0.9408,
+  "checks": [
+    {
+      "name": "scenario_alex_advanced",
+      "passed": true,
+      "detail": "alex/advanced: returned=5, score_range_ok=True, explanations_with_confidence=True"
+    },
+    {
+      "name": "scenario_maya_simple",
+      "passed": true,
+      "detail": "maya/simple: returned=5, score_range_ok=True, explanations_with_confidence=True"
+    },
+    {
+      "name": "scenario_riley_advanced",
+      "passed": true,
+      "detail": "riley/advanced: returned=5, score_range_ok=True, explanations_with_confidence=True"
+    },
+    {
+      "name": "learned_model_preference_order",
+      "passed": true,
+      "detail": "liked_probability=0.999, skipped_probability=0.154"
+    },
+    {
+      "name": "guardrail_missing_required_fields",
+      "passed": true,
+      "detail": "ValueError raised when mood was missing from user profile"
+    }
+  ]
+}

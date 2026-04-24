@@ -109,6 +109,13 @@ Prompts:
 - Any simple tests or comparisons you ran  
     I ran both scoring modes side by side on the same profiles and compared results — the recommended songs were similar but the reasoning differed in telling ways. I also created Riley, an intentionally contradictory profile (high energy + sad mood, EDM genre + likes acoustic), to see how the system handled a user it was never designed for.
 
+### Quantitative Reliability Snapshot
+
+- Automated tests: 7/7 passing (`pytest -q`)
+- Evaluation harness checks: 5/5 passing (`python -m src.evaluate`)
+- Average model confidence across evaluated recommendations: 0.941
+- Guardrail validation: invalid user profiles with missing required fields correctly raised `ValueError`
+
 No need for numeric metrics unless you created some.
 
 ---
@@ -146,3 +153,13 @@ Prompts:
     I thought it was interesting how the five user profiles were designed to be distinct, yet I still saw some song overlap between users with only partially similar tastes, and users at the polar ends of the spectrum shared no songs at all.
 - How this changed the way you think about music recommendation apps  
     It made me wonder just how much data streaming services actually collect and how precisely they use it, since they are essentially getting an unfiltered window into each person's emotional state over time.
+
+### Misuse Risk and Mitigation
+
+- Potential misuse: The system could be used to reinforce narrow emotional patterns (for example repeatedly serving low-valence songs to a vulnerable user) if deployed without diversity or safety policies.
+- Mitigation in this project: artist/genre diversity penalties, explicit guardrail checks for malformed inputs, and transparent explanation text that surfaces recommendation rationale rather than hiding model behavior.
+
+### AI Collaboration Reflection (Required)
+
+- Helpful AI suggestion: AI-assisted refactoring to split scoring logic into `SimpleScorer` and `AdvancedScorer` classes made the architecture cleaner and easier to test.
+- Flawed AI suggestion: An early AI suggestion over-weighted energy for all profiles, which pushed high-energy songs too aggressively; this was corrected by using grouped dimensions and mood gating in advanced mode.
