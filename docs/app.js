@@ -10,40 +10,55 @@ const MOOD_MAP = {
   focused: [0.3, -0.1]
 };
 
+const STORAGE = {
+  customProfile: "music_demo_custom_profile_v1",
+  mode: "music_demo_mode_v1"
+};
+
 const state = {
   songs: [],
   profiles: [],
   songById: new Map(),
   learnedModel: null,
   activeProfile: null,
+  activeMode: "demo",
+  customProfile: null,
+  currentRows: [],
+  lastActionBySong: new Map(),
+  currentSelectionSongId: null,
+  rerankNonce: 0,
   logs: []
 };
 
 const TARGET_VALENCE_BY_MOOD = {
-  happy: 0.80,
+  happy: 0.8,
   excited: 0.85,
-  chill: 0.60,
+  chill: 0.6,
   focused: 0.55,
   intense: 0.45,
   moody: 0.35,
   relaxed: 0.65,
-  sad: 0.20,
-  angry: 0.20
+  sad: 0.2,
+  angry: 0.2
 };
 
 const TARGET_DANCEABILITY_BY_MOOD = {
-  happy: 0.80,
+  happy: 0.8,
   excited: 0.85,
-  chill: 0.60,
+  chill: 0.6,
   focused: 0.58,
   relaxed: 0.52,
-  moody: 0.50,
+  moody: 0.5,
   intense: 0.62,
   sad: 0.35,
   angry: 0.65
 };
 
 const profileSelect = document.getElementById("profileSelect");
+const customNameInput = document.getElementById("customNameInput");
+const customGenresInput = document.getElementById("customGenresInput");
+const useCustomButton = document.getElementById("useCustomButton");
+const saveCustomButton = document.getElementById("saveCustomButton");
 const moodSelect = document.getElementById("moodSelect");
 const genreSelect = document.getElementById("genreSelect");
 const energyInput = document.getElementById("energyInput");
@@ -56,9 +71,31 @@ const resetButton = document.getElementById("resetButton");
 const resultsContainer = document.getElementById("resultsContainer");
 const statusText = document.getElementById("statusText");
 const logList = document.getElementById("logList");
+const nowPlayingText = document.getElementById("nowPlayingText");
+const sessionStatsText = document.getElementById("sessionStatsText");
+const recentActivityList = document.getElementById("recentActivityList");
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function safeParseJSON(raw, fallback) {
+  if (!raw) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeGenres(text) {
+  return String(text || "")
+    .split(",")
+    .map((g) => g.trim())
+    .filter(Boolean)
+    .slice(0, 6);
 }
 
 function normalizedSimilarity(a, b, span) {
@@ -82,61 +119,94 @@ function genreMatchScore(targetGenre, songGenre, favorites) {
   if ((targetGenre || "").toLowerCase() === (songGenre || "").toLowerCase()) {
     return 1;
   }
-  const idx = favorites.findIndex((g) => g.toLowerCase() === (songGenre || "").toLowerCase());
+  const idx = (favorites || []).findIndex((g) => g.toLowerCase() === (songGenre || "").toLowerCase());
   if (idx >= 0) {
     return clamp(0.75 - idx * 0.08, 0.3, 0.75);
   }
   return 0;
 }
 
+function profileKey(profile) {
+  return String(profile.id || "custom_you");
+}
+
+function feedbackStorageKey(profile) {
+  return "music_demo_feedback_" + profileKey(profile);
+}
+
+function activityStorageKey(profile) {
+  return "music_demo_activity_" + profileKey(profile);
+}
+
 function getProfileEvents(profile) {
   const seed = Array.isArray(profile.feedback_events) ? profile.feedback_events : [];
-  const localKey = "music_demo_feedback_" + profile.id;
-  const localRaw = localStorage.getItem(localKey);
-  if (!localRaw) {
+  const localEvents = safeParseJSON(localStorage.getItem(feedbackStorageKey(profile)), []);
+  if (!Array.isArray(localEvents)) {
     return [...seed];
   }
-
-  try {
-    const localEvents = JSON.parse(localRaw);
-    if (!Array.isArray(localEvents)) {
-      return [...seed];
-    }
-    return [...seed, ...localEvents];
-  } catch {
-    return [...seed];
-  }
+  return [...seed, ...localEvents];
 }
 
 function setLocalProfileEvents(profile, localEvents) {
-  const localKey = "music_demo_feedback_" + profile.id;
-  localStorage.setItem(localKey, JSON.stringify(localEvents));
+  localStorage.setItem(feedbackStorageKey(profile), JSON.stringify(localEvents));
+}
+
+function getProfileActivity(profile) {
+  const activity = safeParseJSON(localStorage.getItem(activityStorageKey(profile)), []);
+  return Array.isArray(activity) ? activity : [];
+}
+
+function setProfileActivity(profile, activity) {
+  localStorage.setItem(activityStorageKey(profile), JSON.stringify(activity.slice(0, 60)));
+}
+
+function pushActivity(profile, action, song) {
+  const activity = getProfileActivity(profile);
+  activity.unshift({
+    action,
+    song_id: song.id,
+    title: song.title,
+    artist: song.artist,
+    at: Date.now()
+  });
+  setProfileActivity(profile, activity);
 }
 
 function recordFeedback(profile, songId, action) {
-  const localKey = "music_demo_feedback_" + profile.id;
-  let localEvents = [];
+  const localEvents = safeParseJSON(localStorage.getItem(feedbackStorageKey(profile)), []);
+  const normalized = Array.isArray(localEvents) ? localEvents : [];
 
-  try {
-    localEvents = JSON.parse(localStorage.getItem(localKey) || "[]");
-  } catch {
-    localEvents = [];
+  const lastForSong = [...normalized].reverse().find((event) => event.song_id === songId && event.source === "live");
+  if (lastForSong && lastForSong.action === action) {
+    return false;
   }
 
-  localEvents.push({
+  normalized.push({
     song_id: songId,
     action,
     source: "live"
   });
+  setLocalProfileEvents(profile, normalized);
+  return true;
+}
 
-  setLocalProfileEvents(profile, localEvents);
+function latestFeedbackActionBySong(profile) {
+  const map = new Map();
+  for (const event of getProfileEvents(profile)) {
+    if (!event || typeof event.song_id === "undefined") {
+      continue;
+    }
+    if (event.action === "like" || event.action === "skip") {
+      map.set(Number(event.song_id), event.action);
+    }
+  }
+  return map;
 }
 
 function feedbackAdjustment(profile, song) {
   const events = getProfileEvents(profile);
   const liked = new Set();
   const skipped = new Set();
-
   const artistTally = {};
   const genreTally = {};
   const moodTally = {};
@@ -174,6 +244,25 @@ function feedbackAdjustment(profile, song) {
   };
 }
 
+function recencyAdjustment(profile, song) {
+  const activity = getProfileActivity(profile).filter((item) => item.action === "play").slice(0, 8);
+  if (activity.length === 0) {
+    return 0;
+  }
+
+  const exactRecent = activity.slice(0, 3).some((item) => item.song_id === song.id);
+  if (exactRecent) {
+    return -0.1;
+  }
+
+  const sameArtistRecent = activity.slice(0, 4).some((item) => item.artist === song.artist);
+  if (sameArtistRecent) {
+    return -0.05;
+  }
+
+  return 0;
+}
+
 function buildLearnedFeatureVector(profile, song) {
   return [
     genreMatchScore(profile.genre, song.genre, profile.favorite_genres || []),
@@ -182,7 +271,7 @@ function buildLearnedFeatureVector(profile, song) {
     normalizedSimilarity(Number(profile.energy || 0.6), Number(song.energy), 1),
     normalizedSimilarity(profile.likes_acoustic ? 0.8 : 0.2, Number(song.acousticness), 1),
     normalizedSimilarity(TARGET_VALENCE_BY_MOOD[(profile.mood || "").toLowerCase()] ?? 0.55, Number(song.valence), 1),
-    normalizedSimilarity(TARGET_DANCEABILITY_BY_MOOD[(profile.mood || "").toLowerCase()] ?? 0.60, Number(song.danceability), 1)
+    normalizedSimilarity(TARGET_DANCEABILITY_BY_MOOD[(profile.mood || "").toLowerCase()] ?? 0.6, Number(song.danceability), 1)
   ];
 }
 
@@ -190,56 +279,66 @@ function predictLearnedProbability(model, features) {
   if (!model) {
     return null;
   }
-
+  if (features.some((v) => !Number.isFinite(v))) {
+    return null;
+  }
   const standardized = features.map((value, index) => (value - model.means[index]) / model.scales[index]);
   const logit = standardized.reduce((sum, value, index) => sum + value * model.coefficients[index], model.intercept);
   return 1 / (1 + Math.exp(-logit));
 }
 
-function scoreSong(profile, song, feedbackCap = 0.35) {
-  const targetMood = moodSelect.value;
-  const targetGenre = genreSelect.value;
-  const targetEnergy = Number(energyInput.value);
-  const targetTempo = Number(tempoInput.value);
-  const likesAcoustic = acousticInput.checked;
+function currentControlProfile(baseProfile) {
+  return {
+    ...baseProfile,
+    mood: moodSelect.value,
+    genre: genreSelect.value,
+    energy: Number(energyInput.value),
+    tempo_bpm: Number(tempoInput.value),
+    likes_acoustic: acousticInput.checked,
+    favorite_genres: normalizeGenres(customGenresInput.value).length > 0
+      ? normalizeGenres(customGenresInput.value)
+      : (baseProfile.favorite_genres || [genreSelect.value])
+  };
+}
 
-  const moodScore = moodSimilarity(targetMood, song.mood);
-  const energyScore = normalizedSimilarity(targetEnergy, Number(song.energy), 1);
-  const tempoScore = normalizedSimilarity(targetTempo, Number(song.tempo_bpm), 110);
-  const genreScore = genreMatchScore(targetGenre, song.genre, profile.favorite_genres || []);
-  const acousticTarget = likesAcoustic ? 0.8 : 0.2;
+function scoreSong(profile, song, feedbackCap = 0.35) {
+  const runtimeProfile = currentControlProfile(profile);
+  const moodScore = moodSimilarity(runtimeProfile.mood, song.mood);
+  const energyScore = normalizedSimilarity(runtimeProfile.energy, Number(song.energy), 1);
+  const tempoScore = normalizedSimilarity(runtimeProfile.tempo_bpm, Number(song.tempo_bpm), 110);
+  const genreScore = genreMatchScore(runtimeProfile.genre, song.genre, runtimeProfile.favorite_genres || []);
+  const acousticTarget = runtimeProfile.likes_acoustic ? 0.8 : 0.2;
   const acousticScore = normalizedSimilarity(acousticTarget, Number(song.acousticness), 1);
 
   const base =
-    0.30 * moodScore +
+    0.3 * moodScore +
     0.25 * energyScore +
-    0.20 * genreScore +
+    0.2 * genreScore +
     0.15 * tempoScore +
-    0.10 * acousticScore;
+    0.1 * acousticScore;
 
   const feedback = feedbackAdjustment(profile, song);
   const cappedFeedback = clamp(feedback.total, -feedbackCap, feedbackCap);
-  const heuristicScore = clamp(base + cappedFeedback, 0, 1);
+  const recency = recencyAdjustment(profile, song);
+  const heuristicScore = clamp(base + cappedFeedback + recency, 0, 1);
 
-  const learnedFeatures = buildLearnedFeatureVector(
-    {
-      ...profile,
-      genre: targetGenre,
-      mood: targetMood,
-      energy: targetEnergy,
-      tempo_bpm: targetTempo,
-      likes_acoustic: likesAcoustic
-    },
-    song
-  );
+  const learnedFeatures = buildLearnedFeatureVector(runtimeProfile, song);
   const learnedProbability = predictLearnedProbability(state.learnedModel, learnedFeatures);
-  const final = learnedProbability === null
-    ? heuristicScore
-    : clamp(0.7 * learnedProbability + 0.3 * heuristicScore, 0, 1);
+  const rerankJitter = ((Math.sin((song.id + 1) * (state.rerankNonce + 1)) + 1) / 2) * 0.01;
+  let final = learnedProbability === null
+    ? clamp(heuristicScore + rerankJitter, 0, 1)
+    : clamp(0.7 * learnedProbability + 0.3 * heuristicScore + rerankJitter, 0, 1);
+
+  const latestAction = state.lastActionBySong.get(song.id);
+  if (latestAction === "skip") {
+    final = clamp(final - 0.35, 0, 1);
+  }
+  if (latestAction === "like") {
+    final = clamp(final + 0.12, 0, 1);
+  }
 
   return {
     score: final,
-    base,
     learnedProbability,
     components: {
       moodScore,
@@ -247,13 +346,14 @@ function scoreSong(profile, song, feedbackCap = 0.35) {
       genreScore,
       tempoScore,
       acousticScore,
-      feedback: cappedFeedback
-    },
-    feedbackBreakdown: feedback
+      feedback: cappedFeedback,
+      recency
+    }
   };
 }
 
 function rankSongs(profile) {
+  state.lastActionBySong = latestFeedbackActionBySong(profile);
   let scored = state.songs.map((song) => ({ song, scored: scoreSong(profile, song) }));
   scored.sort((a, b) => b.scored.score - a.scored.score);
 
@@ -261,7 +361,6 @@ function rankSongs(profile) {
   const avgScore = topFive.reduce((sum, row) => sum + row.scored.score, 0) / Math.max(topFive.length, 1);
   const variance = topFive.reduce((sum, row) => sum + (row.scored.score - avgScore) ** 2, 0) / Math.max(topFive.length, 1);
   const spread = Math.sqrt(variance);
-
   const guardrailTriggered = avgScore < 0.34 || spread < 0.04;
 
   if (guardrailTriggered) {
@@ -304,6 +403,9 @@ function recommendationReason(row) {
   if (c.feedback < -0.06) {
     parts.push("feedback history penalizes this song");
   }
+  if (c.recency < -0.01) {
+    parts.push("recent-play penalty reduces repeats");
+  }
 
   if (typeof row.scored.learnedProbability === "number") {
     if (row.scored.learnedProbability >= 0.75) {
@@ -313,24 +415,100 @@ function recommendationReason(row) {
     }
   }
 
-  if (parts.length === 0) {
-    return "Balanced match across multiple weak signals.";
+  return parts.length === 0
+    ? "Balanced match across multiple weak signals."
+    : parts.join(", ") + ".";
+}
+
+function updateSessionWidgets(profile) {
+  const activity = getProfileActivity(profile);
+  const plays = activity.filter((item) => item.action === "play").length;
+  const likes = activity.filter((item) => item.action === "like").length;
+  const skips = activity.filter((item) => item.action === "skip").length;
+  const lastPlay = activity.find((item) => item.action === "play");
+
+  sessionStatsText.textContent = `${plays} plays • ${likes} likes • ${skips} skips`;
+  nowPlayingText.textContent = lastPlay
+    ? `${lastPlay.title} by ${lastPlay.artist}`
+    : "No selection yet.";
+
+  const recent = activity.slice(0, 6);
+  recentActivityList.innerHTML = recent.length === 0
+    ? "<li class='muted'>No personal activity yet.</li>"
+    : recent.map((item) => `<li>${item.action.toUpperCase()} • ${item.title} <span class='small'>${item.artist}</span></li>`).join("");
+}
+
+function handleSongAction(profile, songId, action) {
+  const song = state.songById.get(songId);
+  if (!song) {
+    return;
   }
 
-  return parts.join(", ") + ".";
+  if (action === "play") {
+    state.currentSelectionSongId = songId;
+    pushActivity(profile, "play", song);
+    logEvent(`Selected: ${song.title} - ${song.artist}`, false);
+  }
+
+  if (action === "like" || action === "skip") {
+    const wasRecorded = recordFeedback(profile, songId, action);
+    if (!wasRecorded) {
+      logEvent(`Ignored duplicate ${action} on ${song.title}.`, true);
+      renderResults(profile);
+      return;
+    }
+    pushActivity(profile, action, song);
+    logEvent(`Feedback added: ${song.title} -> ${action}.`, false);
+
+    if (action === "skip") {
+      const nextCandidate = state.currentRows.find((row) => {
+        if (row.song.id === songId) {
+          return false;
+        }
+        return state.lastActionBySong.get(row.song.id) !== "skip";
+      });
+      if (nextCandidate) {
+        state.currentSelectionSongId = nextCandidate.song.id;
+        pushActivity(profile, "play", nextCandidate.song);
+        logEvent(`Auto-selected next recommendation: ${nextCandidate.song.title}.`, false);
+      }
+    }
+  }
+
+  renderResults(profile);
 }
 
 function renderResults(profile) {
   const rows = rankSongs(profile);
+  state.currentRows = rows;
+
+  if (!state.currentSelectionSongId && rows[0]) {
+    state.currentSelectionSongId = rows[0].song.id;
+  }
+
+  const rowSongIds = new Set(rows.map((row) => row.song.id));
+  if (state.currentSelectionSongId && !rowSongIds.has(state.currentSelectionSongId) && rows[0]) {
+    state.currentSelectionSongId = rows[0].song.id;
+  }
+
+  const feedbackMap = latestFeedbackActionBySong(profile);
   const confidence = rows[0]?.scored.score || 0;
-  statusText.textContent = "Top confidence score: " + confidence.toFixed(3);
+  const profileName = state.activeMode === "custom"
+    ? (state.customProfile?.name || "You")
+    : (profile.name || "Demo User");
+  const selectedSong = rows.find((row) => row.song.id === state.currentSelectionSongId)?.song;
+  statusText.textContent = `${profileName} • Top confidence ${confidence.toFixed(3)} • Selection: ${selectedSong ? selectedSong.title : "None"}`;
 
   const tableRows = rows.map((row, idx) => {
     const song = row.song;
     const score = row.scored;
+    const latestAction = feedbackMap.get(song.id);
+    const isSelected = state.currentSelectionSongId === song.id;
+    const likeDisabled = latestAction === "like" ? "disabled" : "";
+    const skipDisabled = latestAction === "skip" ? "disabled" : "";
 
     return `
-      <tr>
+      <tr${isSelected ? " class='is-selected'" : ""}>
         <td>${idx + 1}</td>
         <td>
           <strong>${song.title}</strong><br>
@@ -347,15 +525,15 @@ function renderResults(profile) {
           <span class="small">Genre ${toPct(score.components.genreScore)}</span><br>
           <span class="small">Tempo ${toPct(score.components.tempoScore)}</span><br>
           <span class="small">Acoustic ${toPct(score.components.acousticScore)}</span><br>
-          <span class="small">Feedback ${(score.components.feedback >= 0 ? "+" : "") + score.components.feedback.toFixed(3)}</span>
+          <span class="small">Feedback ${(score.components.feedback >= 0 ? "+" : "") + score.components.feedback.toFixed(3)}</span><br>
+          <span class="small">Recency ${(score.components.recency >= 0 ? "+" : "") + score.components.recency.toFixed(3)}</span>
         </td>
-        <td>
-          ${recommendationReason(row)}
-        </td>
+        <td>${recommendationReason(row)}</td>
         <td>
           <div class="cell-actions">
-            <button class="btn btn-primary btn-mini" data-song-id="${song.id}" data-action="like">Like</button>
-            <button class="btn btn-secondary btn-mini" data-song-id="${song.id}" data-action="skip">Skip</button>
+            <button class="btn btn-primary btn-mini" data-song-id="${song.id}" data-action="play">Select</button>
+            <button class="btn btn-primary btn-mini" data-song-id="${song.id}" data-action="like" ${likeDisabled}>Like</button>
+            <button class="btn btn-secondary btn-mini" data-song-id="${song.id}" data-action="skip" ${skipDisabled}>Skip</button>
           </div>
         </td>
       </tr>
@@ -373,7 +551,7 @@ function renderResults(profile) {
             <th>Score</th>
             <th>Feature Breakdown</th>
             <th>Why</th>
-            <th>Feedback</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
@@ -388,18 +566,17 @@ function renderResults(profile) {
       if (!songId || !action) {
         return;
       }
-
-      recordFeedback(profile, songId, action);
-      logEvent("Live feedback added: song " + songId + " -> " + action + ".", false);
-      renderResults(profile);
+      handleSongAction(profile, songId, action);
     });
   });
+
+  updateSessionWidgets(profile);
 }
 
 function logEvent(message, isAlert) {
   const timestamp = new Date().toLocaleTimeString();
   state.logs.unshift({ message, isAlert, timestamp });
-  state.logs = state.logs.slice(0, 8);
+  state.logs = state.logs.slice(0, 10);
 
   logList.innerHTML = state.logs
     .map((entry) => {
@@ -419,13 +596,7 @@ function fillGenreSelect() {
   genreSelect.innerHTML = genres.map((genre) => `<option value="${genre}">${genre}</option>`).join("");
 }
 
-function setProfile(profileId) {
-  const profile = state.profiles.find((p) => p.id === profileId);
-  if (!profile) {
-    return;
-  }
-
-  state.activeProfile = profile;
+function applyProfileToControls(profile) {
   moodSelect.value = profile.mood;
   genreSelect.value = profile.genre;
   energyInput.value = profile.energy;
@@ -433,8 +604,96 @@ function setProfile(profileId) {
   acousticInput.checked = Boolean(profile.likes_acoustic);
   energyValue.textContent = Number(profile.energy).toFixed(2);
   tempoValue.textContent = String(profile.tempo_bpm);
+  customNameInput.value = profile.name || "";
+  customGenresInput.value = (profile.favorite_genres || []).join(", ");
+}
 
-  logEvent("Profile switched to " + profile.name + ".", false);
+function saveCustomProfile() {
+  const name = String(customNameInput.value || "You").trim() || "You";
+  const favorites = normalizeGenres(customGenresInput.value);
+  const profile = {
+    id: "custom_you",
+    name,
+    genre: genreSelect.value,
+    favorite_genres: favorites.length > 0 ? favorites : [genreSelect.value],
+    mood: moodSelect.value,
+    energy: Number(energyInput.value),
+    tempo_bpm: Number(tempoInput.value),
+    likes_acoustic: acousticInput.checked,
+    feedback_events: []
+  };
+
+  state.customProfile = profile;
+  localStorage.setItem(STORAGE.customProfile, JSON.stringify(profile));
+  logEvent(`Saved personal profile for ${name}.`, false);
+}
+
+function loadOrCreateCustomProfile() {
+  const saved = safeParseJSON(localStorage.getItem(STORAGE.customProfile), null);
+  if (saved && saved.id) {
+    state.customProfile = saved;
+    return;
+  }
+
+  const base = state.profiles[0] || {
+    genre: "pop",
+    mood: "happy",
+    energy: 0.6,
+    tempo_bpm: 110,
+    likes_acoustic: false,
+    favorite_genres: ["pop"]
+  };
+  state.customProfile = {
+    id: "custom_you",
+    name: "You",
+    genre: base.genre,
+    favorite_genres: base.favorite_genres || [base.genre],
+    mood: base.mood,
+    energy: base.energy,
+    tempo_bpm: base.tempo_bpm,
+    likes_acoustic: base.likes_acoustic,
+    feedback_events: []
+  };
+}
+
+function setMode(mode) {
+  state.activeMode = mode;
+  localStorage.setItem(STORAGE.mode, mode);
+
+  if (mode === "custom") {
+    if (!state.customProfile) {
+      loadOrCreateCustomProfile();
+    }
+    state.activeProfile = state.customProfile;
+    applyProfileToControls(state.customProfile);
+    profileSelect.disabled = true;
+    useCustomButton.textContent = "Use Demo Profiles";
+    logEvent(`Switched to personal mode for ${state.customProfile.name}.`, false);
+    renderResults(state.customProfile);
+    return;
+  }
+
+  profileSelect.disabled = false;
+  useCustomButton.textContent = "Use My Profile";
+
+  if (state.profiles.length > 0) {
+    setDemoProfile(profileSelect.value || state.profiles[0].id);
+  }
+}
+
+function setDemoProfile(profileId) {
+  const profile = state.profiles.find((p) => String(p.id) === String(profileId));
+  if (!profile) {
+    return;
+  }
+
+  state.activeMode = "demo";
+  state.activeProfile = profile;
+  profileSelect.value = profile.id;
+  applyProfileToControls(profile);
+  profileSelect.disabled = false;
+  useCustomButton.textContent = "Use My Profile";
+  logEvent(`Profile switched to demo user ${profile.name}.`, false);
   renderResults(profile);
 }
 
@@ -443,9 +702,57 @@ function resetFeedbackForActiveProfile() {
     return;
   }
 
-  localStorage.removeItem("music_demo_feedback_" + state.activeProfile.id);
-  logEvent("Local feedback reset for " + state.activeProfile.name + ".", true);
+  localStorage.removeItem(feedbackStorageKey(state.activeProfile));
+  localStorage.removeItem(activityStorageKey(state.activeProfile));
+  logEvent(`Local activity reset for ${state.activeProfile.name || "active profile"}.`, true);
   renderResults(state.activeProfile);
+}
+
+function bindEvents() {
+  profileSelect.addEventListener("change", () => setDemoProfile(profileSelect.value));
+  useCustomButton.addEventListener("click", () => {
+    if (state.activeMode === "custom") {
+      setMode("demo");
+      return;
+    }
+    saveCustomProfile();
+    setMode("custom");
+  });
+  saveCustomButton.addEventListener("click", () => saveCustomProfile());
+
+  recommendButton.addEventListener("click", () => {
+    if (!state.activeProfile) {
+      return;
+    }
+    if (state.activeMode === "custom") {
+      saveCustomProfile();
+    }
+    state.rerankNonce += 1;
+    logEvent("Manual rerank triggered.", false);
+    renderResults(state.activeProfile);
+  });
+
+  resetButton.addEventListener("click", resetFeedbackForActiveProfile);
+
+  energyInput.addEventListener("input", () => {
+    energyValue.textContent = Number(energyInput.value).toFixed(2);
+  });
+
+  tempoInput.addEventListener("input", () => {
+    tempoValue.textContent = String(tempoInput.value);
+  });
+
+  [moodSelect, genreSelect, acousticInput, energyInput, tempoInput].forEach((element) => {
+    element.addEventListener("change", () => {
+      if (!state.activeProfile) {
+        return;
+      }
+      if (state.activeMode === "custom") {
+        saveCustomProfile();
+      }
+      renderResults(state.activeProfile);
+    });
+  });
 }
 
 async function loadData() {
@@ -478,34 +785,17 @@ async function loadData() {
 
     fillMoodSelect();
     fillGenreSelect();
+    loadOrCreateCustomProfile();
+    bindEvents();
 
-    profileSelect.addEventListener("change", () => setProfile(profileSelect.value));
-    recommendButton.addEventListener("click", () => {
-      if (state.activeProfile) {
-        logEvent("Manual rerank triggered.", false);
-        renderResults(state.activeProfile);
-      }
-    });
-    resetButton.addEventListener("click", resetFeedbackForActiveProfile);
+    const persistedMode = localStorage.getItem(STORAGE.mode);
+    if (persistedMode === "custom") {
+      setMode("custom");
+    } else {
+      setDemoProfile(state.profiles[0].id);
+    }
 
-    energyInput.addEventListener("input", () => {
-      energyValue.textContent = Number(energyInput.value).toFixed(2);
-    });
-
-    tempoInput.addEventListener("input", () => {
-      tempoValue.textContent = String(tempoInput.value);
-    });
-
-    [moodSelect, genreSelect, acousticInput, energyInput, tempoInput].forEach((element) => {
-      element.addEventListener("change", () => {
-        if (state.activeProfile) {
-          renderResults(state.activeProfile);
-        }
-      });
-    });
-
-    setProfile(state.profiles[0].id);
-    logEvent("App boot complete. Data loaded and recommendations ready.", false);
+    logEvent("App ready. Demo and personal profile modes are active.", false);
   } catch (error) {
     console.error(error);
     statusText.textContent = "Failed to load app data. Check file paths and refresh.";

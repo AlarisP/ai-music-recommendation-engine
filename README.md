@@ -280,6 +280,24 @@ It also applies **user feedback learning** from seed profile events (`like`/`ski
    python -m src.main
    ```
 
+### CLI Logic Tester (No UI)
+
+To test recommendation logic without the website interface, run:
+
+```bash
+python -m src.cli_recommender
+```
+
+This opens an interactive CLI loop where you can:
+
+- switch profile and scoring mode
+- like or skip ranked songs
+- clear feedback for a song
+- set mood/genre/energy/tempo/acoustic values
+- rerank and inspect explanation text directly
+
+Type `help` inside the CLI for all commands.
+
 ### Running Tests
 
 ```bash

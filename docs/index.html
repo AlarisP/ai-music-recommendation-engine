@@ -21,10 +21,28 @@
     </section>
 
     <section class="controls card">
+      <div class="persona-row">
+        <div>
+          <p class="eyebrow">Experience Mode</p>
+          <p class="persona-copy">Use seeded demo listeners or switch to your own persistent profile.</p>
+        </div>
+        <button id="useCustomButton" class="btn btn-secondary">Use My Profile</button>
+      </div>
+
       <div class="control-grid">
         <label>
-          Profile
+          Demo profile
           <select id="profileSelect"></select>
+        </label>
+
+        <label>
+          Your display name
+          <input id="customNameInput" type="text" maxlength="30" placeholder="e.g. Casey">
+        </label>
+
+        <label>
+          Favorite genres (comma-separated)
+          <input id="customGenresInput" type="text" maxlength="120" placeholder="lofi, r&b, indie pop">
         </label>
 
         <label>
@@ -57,7 +75,25 @@
 
       <div class="actions">
         <button id="recommendButton" class="btn btn-primary">Recommend Top 5</button>
+        <button id="saveCustomButton" class="btn btn-secondary">Save My Profile</button>
         <button id="resetButton" class="btn btn-secondary">Reset Local Feedback</button>
+      </div>
+    </section>
+
+    <section class="session card">
+      <div class="session-grid">
+        <article>
+          <h2>Current Selection</h2>
+          <p id="nowPlayingText" class="muted">No selection yet.</p>
+        </article>
+        <article>
+          <h2>Your Session Stats</h2>
+          <p id="sessionStatsText" class="muted">0 plays • 0 likes • 0 skips</p>
+        </article>
+        <article>
+          <h2>Recent Activity</h2>
+          <ul id="recentActivityList" class="mini-list"></ul>
+        </article>
       </div>
     </section>
 

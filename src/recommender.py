@@ -4,12 +4,13 @@ import csv
 import logging
 from pathlib import Path
 
-try:
+if __package__:
     from .scorers import SimpleScorer, AdvancedScorer
     from .ai_model import load_default_model
-except ImportError:
-    from scorers import SimpleScorer, AdvancedScorer
-    from ai_model import load_default_model
+else:
+    # Support direct execution contexts outside package mode.
+    from src.scorers import SimpleScorer, AdvancedScorer
+    from src.ai_model import load_default_model
 
 
 REQUIRED_USER_KEYS = ("genre", "mood", "energy", "likes_acoustic")

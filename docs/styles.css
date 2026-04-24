@@ -75,15 +75,21 @@ label {
 }
 
 select,
+input[type="text"],
 input[type="range"] {
   width: 100%;
 }
 
-select {
+select,
+input[type="text"] {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.5rem;
   font: inherit;
+}
+
+input[type="text"] {
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .value-chip {
@@ -112,6 +118,46 @@ select {
   gap: 0.6rem;
 }
 
+.persona-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.persona-copy {
+  margin: 0.25rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.9rem;
+}
+
+.session h2 {
+  margin: 0;
+  font: 700 1rem/1.2 "Space Grotesk", sans-serif;
+}
+
+.muted {
+  color: var(--ink-soft);
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+}
+
+.mini-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
 .btn {
   border: 0;
   border-radius: 10px;
@@ -133,6 +179,11 @@ select {
 .btn-mini {
   padding: 0.4rem 0.6rem;
   font-size: 0.8rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .results-header {
@@ -171,6 +222,10 @@ td {
   padding: 0.5rem;
   text-align: left;
   vertical-align: top;
+}
+
+tr.is-selected {
+  background: rgba(14, 136, 127, 0.08);
 }
 
 th {
@@ -219,6 +274,11 @@ th {
 
   .hero h1 {
     font-size: 1.7rem;
+  }
+
+  .persona-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   th,
