@@ -207,8 +207,7 @@ function latestFeedbackActionBySong(profile) {
 
 function feedbackAdjustment(profile, song) {
   const events = getProfileEvents(profile);
-  const liked = new Set();
-  const skipped = new Set();
+  const latestActionPerSong = new Map();
   const artistTally = {};
   const genreTally = {};
   const moodTally = {};
@@ -220,19 +219,15 @@ function feedbackAdjustment(profile, song) {
       continue;
     }
 
-    if (event.action === "like") {
-      liked.add(event.song_id);
-    }
-    if (event.action === "skip") {
-      skipped.add(event.song_id);
-    }
+    latestActionPerSong.set(Number(event.song_id), event.action);
 
     artistTally[eventSong.artist] = (artistTally[eventSong.artist] || 0) + weight;
     genreTally[eventSong.genre] = (genreTally[eventSong.genre] || 0) + weight;
     moodTally[eventSong.mood] = (moodTally[eventSong.mood] || 0) + weight;
   }
 
-  const direct = liked.has(song.id) ? 0.3 : skipped.has(song.id) ? -0.35 : 0;
+  const songAction = latestActionPerSong.get(song.id);
+  const direct = songAction === "like" ? 0.3 : songAction === "skip" ? -0.35 : 0;
   const artist = clamp((artistTally[song.artist] || 0) * 0.07, -0.2, 0.2);
   const genre = clamp((genreTally[song.genre] || 0) * 0.06, -0.18, 0.18);
   const mood = clamp((moodTally[song.mood] || 0) * 0.05, -0.14, 0.14);
@@ -328,17 +323,9 @@ function scoreSong(profile, song, feedbackCap = 0.35) {
   const learnedProbability = predictLearnedProbability(state.learnedModel, learnedFeatures);
   // For demo profiles the per-profile model is meaningful → 0.5/0.5 blend.
   // null model (custom user) → heuristic only.
-  let final = learnedProbability === null
+  const final = learnedProbability === null
     ? clamp(heuristicScore, 0, 1)
     : clamp(0.5 * learnedProbability + 0.5 * heuristicScore, 0, 1);
-
-  const latestAction = state.lastActionBySong.get(song.id);
-  if (latestAction === "skip") {
-    final = clamp(final - 0.35, 0, 1);
-  }
-  if (latestAction === "like") {
-    final = clamp(final + 0.12, 0, 1);
-  }
 
   return {
     score: final,
@@ -428,11 +415,11 @@ function updateSessionWidgets(profile) {
   const plays = activity.filter((item) => item.action === "play").length;
   const likes = activity.filter((item) => item.action === "like").length;
   const skips = activity.filter((item) => item.action === "skip").length;
-  const lastPlay = activity.find((item) => item.action === "play");
+  const currentSong = state.currentSelectionSongId ? state.songById.get(state.currentSelectionSongId) : null;
 
   sessionStatsText.textContent = `${plays} plays • ${likes} likes • ${skips} skips`;
-  nowPlayingText.textContent = lastPlay
-    ? `${lastPlay.title} by ${lastPlay.artist}`
+  nowPlayingText.textContent = currentSong
+    ? `${currentSong.title} by ${currentSong.artist}`
     : "No selection yet.";
 
   const recent = activity.slice(0, 6);
@@ -463,17 +450,13 @@ function handleSongAction(profile, songId, action) {
     pushActivity(profile, action, song);
     logEvent(`Feedback added: ${song.title} -> ${action}.`, false);
 
-    if (action === "skip") {
-      const nextCandidate = state.currentRows.find((row) => {
-        if (row.song.id === songId) {
-          return false;
-        }
-        return state.lastActionBySong.get(row.song.id) !== "skip";
-      });
+    if (action === "skip" && songId === state.currentSelectionSongId) {
+      const currentIdx = state.currentRows.findIndex((row) => row.song.id === songId);
+      const nextCandidate = state.currentRows[currentIdx + 1] || null;
       if (nextCandidate) {
         state.currentSelectionSongId = nextCandidate.song.id;
         pushActivity(profile, "play", nextCandidate.song);
-        logEvent(`Auto-selected next recommendation: ${nextCandidate.song.title}.`, false);
+        logEvent(`Auto-selected next: ${nextCandidate.song.title}.`, false);
       }
     }
   }
@@ -482,7 +465,7 @@ function handleSongAction(profile, songId, action) {
 }
 
 function renderResults(profile) {
-  const rows = rankSongs(profile);
+  let rows = rankSongs(profile);
   state.currentRows = rows;
 
   if (!state.currentSelectionSongId && rows[0]) {

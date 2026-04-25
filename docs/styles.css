@@ -235,7 +235,9 @@ td {
 }
 
 tr.is-selected {
-  background: rgba(14, 136, 127, 0.08);
+  background: rgba(14, 136, 127, 0.18);
+  outline: 2px solid rgba(14, 136, 127, 0.5);
+  outline-offset: -2px;
 }
 
 th {
