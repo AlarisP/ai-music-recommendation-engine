@@ -1,24 +1,88 @@
-flowchart LR
-    subgraph INPUT[Input]
-        A[User Profile Source<br/>target mood, genre, energy, tempo, acoustic preference]
-        B[Song Dataset Source<br/>docs/data/songs.json + docs/data/profiles.json]
+flowchart TD
+    %% ── DATA LAYER ──────────────────────────────────────────────────────────
+    subgraph DATA["Data Layer"]
+        SONGS["songs.json / songs.csv\n19 songs — genre, mood, energy,\ntempo, valence, danceability, acousticness"]
+        PROFILES["profiles.json\n5 demo profiles with\nseed feedback events"]
+        MODELS["docs/data/models/\nalex_model.json  maya_model.json\njordan_model.json  sam_model.json\nriley_model.json  default_model.json"]
     end
 
-    subgraph CORE[AI Recommendation Pipeline]
-        C[Feature Retriever]
-        D[Scoring Agent<br/>mood distance, energy difference,<br/>genre flags, tempo difference, acoustic match]
-        E[Feedback Integrator<br/>seed feedback + live likes and skips]
-        F[Evaluator and Guardrails<br/>confidence and score-spread checks]
+    %% ── MODEL TRAINING ──────────────────────────────────────────────────────
+    subgraph TRAIN["Model Training — train_models.py (Python)"]
+        TRAINER["train_model_for_profile()\nLogistic Regression trained on\none profile's liked vs skipped songs"]
+        DEFAULT["default_model.json\nzero-weight neutral model\nfor real custom users"]
     end
 
-    subgraph OUTPUT[Output]
-        G[Top 5 Recommendations<br/>scores + explanations]
+    PROFILES --> TRAINER
+    SONGS    --> TRAINER
+    TRAINER  --> MODELS
+    TRAINER  --> DEFAULT
+
+    %% ── FRONTEND PIPELINE ───────────────────────────────────────────────────
+    subgraph BROWSER["Browser Frontend — app.js (JavaScript)"]
+
+        subgraph INPUT["User Input"]
+            MODE{"Profile Mode?"}
+            DEMO_IN["Demo Profile\nselect Alex / Maya / Jordan\nSam / Riley"]
+            CUST_IN["My Profile\nset name, genres, mood,\nenergy, tempo, acoustic"]
+        end
+
+        MODE -->|demo| DEMO_IN
+        MODE -->|custom| CUST_IN
+
+        subgraph SCORE["Scoring Pipeline — scoreSong()"]
+            HEURISTIC["Heuristic Scorer\nmood 30%  energy 25%  genre 20%\ntempo 15%  acoustic 10%"]
+            FEEDBACK["Feedback Adjuster\nseed events + live likes/skips\ncapped ± 0.35"]
+            RECENCY["Recency Penalty\n− 0.10 if played recently\n− 0.05 same artist"]
+            LEARNED["Learned Model\nlogistic regression\npredict_probability()"]
+            BLEND["Score Blend\ndemo:   50% learned + 50% heuristic\ncustom: 100% heuristic only"]
+        end
+
+        DEMO_IN --> HEURISTIC
+        DEMO_IN --> LEARNED
+        CUST_IN --> HEURISTIC
+
+        HEURISTIC --> FEEDBACK --> RECENCY --> BLEND
+        LEARNED              -->             BLEND
+
+        subgraph GUARD["Evaluator — rankSongs()"]
+            GUARDRAIL["Guardrail Check\nif avg score < 0.34\nor spread < 0.04\n→ reduce feedback cap to 0.20"]
+        end
+
+        BLEND --> GUARDRAIL
+
+        subgraph OUT["Output"]
+            TOP5["Top 5 Recommendations\nranked by score\nwith feature breakdown + why text"]
+        end
+
+        GUARDRAIL --> TOP5
     end
 
-    A --> C
-    B --> C
-    C --> D --> E --> F --> G
+    MODELS --> LEARNED
+    SONGS  --> SCORE
+    PROFILES --> DEMO_IN
 
-    G -->|shown to user| H
-    H[Human User] -->|Like or Skip| E
-    T[Testing Layer<br/>manual checks + pytest] -->|validates ranking behavior| F
+    %% ── HUMAN INTERACTION ───────────────────────────────────────────────────
+    subgraph HUMAN["Human Interaction"]
+        USER["User"]
+        ACTIONS["Like / Skip / Select\nbuttons per song"]
+        LOCALSTORAGE["localStorage\npersists custom profile\n+ activity log"]
+    end
+
+    TOP5     --> USER
+    USER     --> ACTIONS
+    ACTIONS  --> FEEDBACK
+    CUST_IN  --> LOCALSTORAGE
+    LOCALSTORAGE --> CUST_IN
+
+    %% ── TESTING LAYER ───────────────────────────────────────────────────────
+    subgraph TESTING["Testing and Reliability Layer"]
+        PYTEST["pytest — 13 tests\ntest_ai_model.py · test_recommender.py\nper-profile model quality\nvalid probability range\ndeterminism · differentiation"]
+        CC["check_consistency.py\n① Determinism — same profile = same top-5\n② Model quality — liked score > skipped score\n③ Differentiation — profiles yield distinct lists"]
+        LOGS["logs/recommender.log\nscoring errors, skipped songs,\nout-of-range values"]
+    end
+
+    MODELS  --> PYTEST
+    MODELS  --> CC
+    TOP5    --> PYTEST
+    GUARDRAIL --> LOGS
+    SCORE   --> LOGS

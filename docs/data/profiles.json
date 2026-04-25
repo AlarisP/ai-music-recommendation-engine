@@ -31,12 +31,14 @@
     "feedback_events": [
       {"song_id": 1, "action": "like"},
       {"song_id": 5, "action": "like"},
-      {"song_id": 12, "action": "like"},
+      {"song_id": 20, "action": "like"},
+      {"song_id": 21, "action": "like"},
+      {"song_id": 22, "action": "like"},
       {"song_id": 16, "action": "like"},
-      {"song_id": 19, "action": "like"},
+      {"song_id": 19, "action": "skip"},
+      {"song_id": 23, "action": "skip"},
       {"song_id": 11, "action": "skip"},
-      {"song_id": 15, "action": "skip"},
-      {"song_id": 4, "action": "skip"}
+      {"song_id": 15, "action": "skip"}
     ]
   },
   {
@@ -67,16 +69,18 @@
     "energy": 0.88,
     "tempo_bpm": 138,
     "likes_acoustic": false,
-    "favorite_genres": ["k-pop", "pop", "hip-hop", "edm"],
+    "favorite_genres": ["k-pop", "edm", "hip-hop"],
     "feedback_events": [
       {"song_id": 19, "action": "like"},
-      {"song_id": 1, "action": "like"},
+      {"song_id": 23, "action": "like"},
+      {"song_id": 24, "action": "like"},
+      {"song_id": 25, "action": "like"},
       {"song_id": 16, "action": "like"},
       {"song_id": 12, "action": "like"},
-      {"song_id": 10, "action": "like"},
+      {"song_id": 20, "action": "skip"},
+      {"song_id": 21, "action": "skip"},
       {"song_id": 11, "action": "skip"},
-      {"song_id": 15, "action": "skip"},
-      {"song_id": 18, "action": "skip"}
+      {"song_id": 15, "action": "skip"}
     ]
   },
   {
