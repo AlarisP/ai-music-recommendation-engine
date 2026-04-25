@@ -1,0 +1,42 @@
+{
+  "profile_id": "default",
+  "feature_names": [
+    "genre_score",
+    "mood_score",
+    "tempo_score",
+    "energy_score",
+    "acoustic_score",
+    "valence_score",
+    "danceability_score"
+  ],
+  "means": [
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "scales": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "coefficients": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "intercept": 0.0,
+  "test_accuracy": null,
+  "training_examples": 0
+}

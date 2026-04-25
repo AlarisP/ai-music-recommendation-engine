@@ -20,6 +20,7 @@ const state = {
   profiles: [],
   songById: new Map(),
   learnedModel: null,
+  profileModels: {},
   activeProfile: null,
   activeMode: "demo",
   customProfile: null,
@@ -325,9 +326,11 @@ function scoreSong(profile, song, feedbackCap = 0.35) {
   const learnedFeatures = buildLearnedFeatureVector(runtimeProfile, song);
   const learnedProbability = predictLearnedProbability(state.learnedModel, learnedFeatures);
   const rerankJitter = ((Math.sin((song.id + 1) * (state.rerankNonce + 1)) + 1) / 2) * 0.01;
+  // For demo profiles the per-profile model is meaningful → 0.5/0.5 blend.
+  // null model (custom user) → heuristic only.
   let final = learnedProbability === null
     ? clamp(heuristicScore + rerankJitter, 0, 1)
-    : clamp(0.7 * learnedProbability + 0.3 * heuristicScore + rerankJitter, 0, 1);
+    : clamp(0.5 * learnedProbability + 0.5 * heuristicScore + rerankJitter, 0, 1);
 
   const latestAction = state.lastActionBySong.get(song.id);
   if (latestAction === "skip") {
@@ -665,6 +668,7 @@ function setMode(mode) {
       loadOrCreateCustomProfile();
     }
     state.activeProfile = state.customProfile;
+    state.learnedModel = null;
     applyProfileToControls(state.customProfile);
     profileSelect.disabled = true;
     useCustomButton.textContent = "Use Demo Profiles";
@@ -689,6 +693,7 @@ function setDemoProfile(profileId) {
 
   state.activeMode = "demo";
   state.activeProfile = profile;
+  state.learnedModel = state.profileModels[profile.id] || null;
   profileSelect.value = profile.id;
   applyProfileToControls(profile);
   profileSelect.disabled = false;
@@ -757,10 +762,9 @@ function bindEvents() {
 
 async function loadData() {
   try {
-    const [songRes, profileRes, modelRes] = await Promise.all([
+    const [songRes, profileRes] = await Promise.all([
       fetch("data/songs.json"),
-      fetch("data/profiles.json"),
-      fetch("data/preference_model.json")
+      fetch("data/profiles.json")
     ]);
 
     if (!songRes.ok || !profileRes.ok) {
@@ -771,12 +775,25 @@ async function loadData() {
     state.profiles = await profileRes.json();
     state.songById = new Map(state.songs.map((song) => [song.id, song]));
 
-    if (modelRes && modelRes.ok) {
-      state.learnedModel = await modelRes.json();
-      logEvent("Learned feedback model loaded successfully.", false);
+    // Load one model per demo profile from docs/data/models/
+    const modelFetches = state.profiles.map((profile) =>
+      fetch(`data/models/${profile.id}_model.json`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => ({ id: profile.id, data }))
+        .catch(() => ({ id: profile.id, data: null }))
+    );
+    const modelResults = await Promise.all(modelFetches);
+    let loadedCount = 0;
+    for (const { id, data } of modelResults) {
+      if (data) {
+        state.profileModels[id] = data;
+        loadedCount++;
+      }
+    }
+    if (loadedCount > 0) {
+      logEvent(`Loaded ${loadedCount} per-profile model(s).`, false);
     } else {
-      state.learnedModel = null;
-      logEvent("Learned feedback model unavailable; using heuristic fallback.", true);
+      logEvent("No per-profile models found; using heuristic fallback.", true);
     }
 
     profileSelect.innerHTML = state.profiles

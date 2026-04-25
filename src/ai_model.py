@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List, Optional
 import csv
 import json
 
@@ -63,11 +63,98 @@ FEATURE_NAMES = [
     "danceability_score",
 ]
 
+MODELS_DIR = Path(__file__).resolve().parents[1] / "docs" / "data" / "models"
+
 
 @lru_cache(maxsize=1)
 def load_default_model() -> PreferenceModel:
-    """Train the model once from the repo's synthetic feedback data."""
+    """Train the model once from the repo's synthetic feedback data (all profiles combined)."""
     return _train_model()
+
+
+def train_model_for_profile(profile: Dict) -> PreferenceModel:
+    """Train a logistic regression model using only one profile's feedback events."""
+    songs = _load_songs()
+    song_lookup = {song["id"]: song for song in songs}
+    user_prefs = _profile_to_user_prefs(profile)
+
+    features: List[List[float]] = []
+    labels: List[int] = []
+
+    for event in profile.get("feedback_events", []):
+        song_id = event.get("song_id")
+        action = event.get("action")
+        song = song_lookup.get(song_id)
+        if not song or action not in {"like", "skip"}:
+            continue
+        features.append(_feature_vector(user_prefs, song))
+        labels.append(1 if action == "like" else 0)
+
+    if len(set(labels)) < 2:
+        raise ValueError(
+            f"Profile '{profile.get('id')}' needs both positive and negative examples."
+        )
+
+    # With small datasets skip the hold-out split to use every example for training.
+    if len(features) >= 10:
+        x_train, x_test, y_train, y_test = train_test_split(
+            features, labels, test_size=0.25, random_state=42, stratify=labels
+        )
+        use_test = True
+    else:
+        x_train, y_train = features, labels
+        x_test, y_test = features, labels
+        use_test = False
+
+    pipeline = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("model", LogisticRegression(max_iter=1000, random_state=42)),
+        ]
+    )
+    pipeline.fit(x_train, y_train)
+    test_accuracy = float(pipeline.score(x_test, y_test)) if use_test else None
+
+    return PreferenceModel(
+        pipeline=pipeline,
+        feature_names=FEATURE_NAMES,
+        test_accuracy=test_accuracy,
+        training_examples=len(features),
+    )
+
+
+def export_all_models(output_dir: Optional[Path] = None) -> None:
+    """Train and export one JSON model file per demo profile plus a neutral default model."""
+    out = output_dir or MODELS_DIR
+    out.mkdir(parents=True, exist_ok=True)
+
+    profiles = _load_profiles()
+    for profile in profiles:
+        profile_id = profile.get("id")
+        model = train_model_for_profile(profile)
+        model_dict = model.to_export_dict()
+        model_dict["profile_id"] = profile_id
+        dest = out / f"{profile_id}_model.json"
+        dest.write_text(json.dumps(model_dict, indent=2), encoding="utf-8")
+        print(f"Saved {dest.name}  (examples={model_dict['training_examples']}, "
+              f"accuracy={model_dict.get('test_accuracy')})")
+
+    # Neutral default model: zero coefficients → sigmoid(0) = 0.5 for every song.
+    # The JS falls back to heuristic-only when this model is absent (null), but
+    # keeping a file makes the slot explicit for future per-user retraining.
+    n = len(FEATURE_NAMES)
+    default_dict = {
+        "profile_id": "default",
+        "feature_names": FEATURE_NAMES,
+        "means": [0.5] * n,
+        "scales": [1.0] * n,
+        "coefficients": [0.0] * n,
+        "intercept": 0.0,
+        "test_accuracy": None,
+        "training_examples": 0,
+    }
+    (out / "default_model.json").write_text(json.dumps(default_dict, indent=2), encoding="utf-8")
+    print("Saved default_model.json  (neutral — heuristic will dominate)")
 
 
 def _train_model() -> PreferenceModel:
