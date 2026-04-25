@@ -12,12 +12,8 @@
 <body>
   <main class="page">
     <section class="hero card">
-      <p class="eyebrow">GitHub Pages Ready</p>
       <h1>AI Music Recommender</h1>
-      <p>
-        This demo uses feature-based AI scoring plus feedback learning in-browser.
-        No backend required.
-      </p>
+      <p>This demo uses feature-based AI scoring plus feedback learning in-browser.</p>
     </section>
 
     <section class="controls card">
@@ -30,17 +26,17 @@
       </div>
 
       <div class="control-grid">
-        <label>
+        <label id="demoProfileLabel" hidden>
           Demo profile
           <select id="profileSelect"></select>
         </label>
 
-        <label>
+        <label id="customNameLabel">
           Your display name
           <input id="customNameInput" type="text" maxlength="30" placeholder="e.g. Casey">
         </label>
 
-        <label>
+        <label id="customGenresLabel">
           Favorite genres (comma-separated)
           <input id="customGenresInput" type="text" maxlength="120" placeholder="lofi, r&b, indie pop">
         </label>
@@ -74,8 +70,7 @@
       </div>
 
       <div class="actions">
-        <button id="recommendButton" class="btn btn-primary">Recommend Top 5</button>
-        <button id="saveCustomButton" class="btn btn-secondary">Save My Profile</button>
+<button id="saveCustomButton" class="btn btn-secondary" hidden>Save My Profile</button>
         <button id="resetButton" class="btn btn-secondary">Reset Local Feedback</button>
       </div>
     </section>

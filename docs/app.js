@@ -27,7 +27,6 @@ const state = {
   currentRows: [],
   lastActionBySong: new Map(),
   currentSelectionSongId: null,
-  rerankNonce: 0,
   logs: []
 };
 
@@ -55,6 +54,9 @@ const TARGET_DANCEABILITY_BY_MOOD = {
   angry: 0.65
 };
 
+const demoProfileLabel = document.getElementById("demoProfileLabel");
+const customNameLabel = document.getElementById("customNameLabel");
+const customGenresLabel = document.getElementById("customGenresLabel");
 const profileSelect = document.getElementById("profileSelect");
 const customNameInput = document.getElementById("customNameInput");
 const customGenresInput = document.getElementById("customGenresInput");
@@ -67,7 +69,6 @@ const tempoInput = document.getElementById("tempoInput");
 const acousticInput = document.getElementById("acousticInput");
 const energyValue = document.getElementById("energyValue");
 const tempoValue = document.getElementById("tempoValue");
-const recommendButton = document.getElementById("recommendButton");
 const resetButton = document.getElementById("resetButton");
 const resultsContainer = document.getElementById("resultsContainer");
 const statusText = document.getElementById("statusText");
@@ -325,12 +326,11 @@ function scoreSong(profile, song, feedbackCap = 0.35) {
 
   const learnedFeatures = buildLearnedFeatureVector(runtimeProfile, song);
   const learnedProbability = predictLearnedProbability(state.learnedModel, learnedFeatures);
-  const rerankJitter = ((Math.sin((song.id + 1) * (state.rerankNonce + 1)) + 1) / 2) * 0.01;
   // For demo profiles the per-profile model is meaningful → 0.5/0.5 blend.
   // null model (custom user) → heuristic only.
   let final = learnedProbability === null
-    ? clamp(heuristicScore + rerankJitter, 0, 1)
-    : clamp(0.5 * learnedProbability + 0.5 * heuristicScore + rerankJitter, 0, 1);
+    ? clamp(heuristicScore, 0, 1)
+    : clamp(0.5 * learnedProbability + 0.5 * heuristicScore, 0, 1);
 
   const latestAction = state.lastActionBySong.get(song.id);
   if (latestAction === "skip") {
@@ -611,6 +611,12 @@ function applyProfileToControls(profile) {
   customGenresInput.value = (profile.favorite_genres || []).join(", ");
 }
 
+function setSaveButtonState(saved) {
+  saveCustomButton.classList.toggle("btn-save-saved", saved);
+  saveCustomButton.classList.toggle("btn-save-unsaved", !saved);
+  saveCustomButton.textContent = saved ? "Profile Saved" : "Save My Profile";
+}
+
 function saveCustomProfile() {
   const name = String(customNameInput.value || "You").trim() || "You";
   const favorites = normalizeGenres(customGenresInput.value);
@@ -628,6 +634,7 @@ function saveCustomProfile() {
 
   state.customProfile = profile;
   localStorage.setItem(STORAGE.customProfile, JSON.stringify(profile));
+  setSaveButtonState(true);
   logEvent(`Saved personal profile for ${name}.`, false);
 }
 
@@ -670,15 +677,17 @@ function setMode(mode) {
     state.activeProfile = state.customProfile;
     state.learnedModel = null;
     applyProfileToControls(state.customProfile);
+    demoProfileLabel.hidden = true;
+    customNameLabel.hidden = false;
+    customGenresLabel.hidden = false;
     profileSelect.disabled = true;
+    saveCustomButton.hidden = false;
+    setSaveButtonState(false);
     useCustomButton.textContent = "Use Demo Profiles";
     logEvent(`Switched to personal mode for ${state.customProfile.name}.`, false);
     renderResults(state.customProfile);
     return;
   }
-
-  profileSelect.disabled = false;
-  useCustomButton.textContent = "Use My Profile";
 
   if (state.profiles.length > 0) {
     setDemoProfile(profileSelect.value || state.profiles[0].id);
@@ -697,6 +706,10 @@ function setDemoProfile(profileId) {
   profileSelect.value = profile.id;
   applyProfileToControls(profile);
   profileSelect.disabled = false;
+  demoProfileLabel.hidden = false;
+  customNameLabel.hidden = true;
+  customGenresLabel.hidden = true;
+  saveCustomButton.hidden = true;
   useCustomButton.textContent = "Use My Profile";
   logEvent(`Profile switched to demo user ${profile.name}.`, false);
   renderResults(profile);
@@ -725,18 +738,6 @@ function bindEvents() {
   });
   saveCustomButton.addEventListener("click", () => saveCustomProfile());
 
-  recommendButton.addEventListener("click", () => {
-    if (!state.activeProfile) {
-      return;
-    }
-    if (state.activeMode === "custom") {
-      saveCustomProfile();
-    }
-    state.rerankNonce += 1;
-    logEvent("Manual rerank triggered.", false);
-    renderResults(state.activeProfile);
-  });
-
   resetButton.addEventListener("click", resetFeedbackForActiveProfile);
 
   energyInput.addEventListener("input", () => {
@@ -753,7 +754,7 @@ function bindEvents() {
         return;
       }
       if (state.activeMode === "custom") {
-        saveCustomProfile();
+        setSaveButtonState(false);
       }
       renderResults(state.activeProfile);
     });
@@ -806,10 +807,10 @@ async function loadData() {
     bindEvents();
 
     const persistedMode = localStorage.getItem(STORAGE.mode);
-    if (persistedMode === "custom") {
-      setMode("custom");
-    } else {
+    if (persistedMode === "demo") {
       setDemoProfile(state.profiles[0].id);
+    } else {
+      setMode("custom");
     }
 
     logEvent("App ready. Demo and personal profile modes are active.", false);

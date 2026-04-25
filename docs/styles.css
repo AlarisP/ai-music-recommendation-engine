@@ -176,6 +176,16 @@ input[type="text"] {
   background: linear-gradient(180deg, #1d8f86, #12635d);
 }
 
+.btn-save-unsaved {
+  background: linear-gradient(180deg, #c23f2a, #8f2a1a);
+  color: white;
+}
+
+.btn-save-saved {
+  background: linear-gradient(180deg, #1a8a3a, #116128);
+  color: white;
+}
+
 .btn-mini {
   padding: 0.4rem 0.6rem;
   font-size: 0.8rem;
