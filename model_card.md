@@ -1,165 +1,109 @@
-# 🎧 Model Card: Music Recommender Simulation
+# Model Card: AI Music Recommendation Engine
 
-## 1. Model Name  
+## 1. Model Name
 
-Give your model a short, descriptive name.  
-Example: **VibeFinder 1.0**  
-    MusicRecommender 1.0
+**AI Music Recommendation Engine** (extended from MusicRecommender 1.0)
 
 ---
 
-## 2. Intended Use  
+## 2. Intended Use
 
-Describe what your recommender is designed to do and who it is for. 
-    This music recommender is designed to give users recommendations for what song to listen to next. It is for people who want a smooth music listening experience. It offers two scoring algorithms: a **simple** mode that is more data-driven and prioritizes genre and mood matching, and an **advanced** mode that groups features into emotional dimensions (FEEL, INTENSITY, STYLE, GROOVE) to create a continuous emotional thread through the music.
+This system recommends the next song to play based on a user's stated preferences and listening feedback. It is designed for classroom exploration of the full applied AI loop: feature engineering → trained model → ranked output → human feedback → model improvement.
 
-Prompts:  
-
-- What kind of recommendations does it generate  
-    It generates a ranked list of the top 5 songs that would be the best match to play next.
-- What assumptions does it make about the user  
-    It assumes the user wants songs that are similar to what they already know they like. It may introduce slightly different styles or moods through diversity penalties, but overall it stays close to the preferences the user has explicitly provided.
-- Is this for real users or classroom exploration  
-    This is for classroom exploration. To make it production-ready, I would need a database to store users and songs, an improved engine that accounts for other users' listening history (collaborative filtering), and a feedback loop so the system learns from what users actually play.
+- **What it generates:** A ranked top-5 list of songs with a score, feature breakdown, and plain-language reason for each pick.
+- **What it assumes about the user:** That the user wants songs similar to what they already like. It has no discovery mechanism — it will not intentionally surface unfamiliar styles.
+- **Two modes:** Demo profiles (Alex, Maya, Jordan, Sam, Riley) load a per-profile trained logistic regression model. Custom ("My Profile") users get heuristic-only scoring so no pre-existing bias influences a blank-slate listener.
+- **Production gap:** To deploy this for real users you would need a database, collaborative filtering (what similar users liked), and a feedback loop that re-trains the model over time rather than using a static export.
 
 ---
 
-## 3. How the Model Works  
+## 3. How the Model Works
 
-Explain your scoring approach in simple language.  
+Each song gets a score built from two signals blended 50/50:
 
-Prompts:  
+**Heuristic scorer** — hand-crafted feature weights: mood (30%), energy (25%), genre (20%), tempo (15%), acoustic preference (10%). A mood gate maps each mood to a position on a valence/arousal grid and penalizes songs that are emotionally opposite to what the user wants. Feedback events (likes and skips) adjust the score by up to ±0.35. Recently played songs receive a small recency penalty to reduce repetition.
 
-- What features of each song are used (genre, energy, mood, etc.)  
-    The features used for each song are: genre, energy, mood, tempo (BPM), valence (how emotionally positive a song feels), danceability, and acousticness.
-- What user preferences are considered  
-    The user's preferred genre, mood, energy level, and whether they like acoustic music are all considered. Multiple favorite genres can also be ranked in order of preference.
-- How does the model turn those into a score  
-    In **simple mode**, the model adds up weighted points for each matching feature: genre is worth the most (×2), followed by mood (×1.5), energy (×1), and smaller bonuses for acoustic style and emotional tone (valence). The song with the highest total wins.  
-    In **advanced mode**, features are grouped into four dimensions — FEEL (mood + valence), INTENSITY (energy + tempo), STYLE (acousticness + genre), and GROOVE (danceability) — and those groups are weighted together into a single score out of 1.0. A "mood gate" penalty then reduces the score of any song whose vibe is nearly the opposite of what the user wants, so a numerically close song can't sneak past a fundamentally wrong emotional fit. Both modes also apply small penalties for repeated artists and genres to keep the top-5 list diverse.
-- What changes did you make from the starter logic  
-    I added the advanced scoring mode described above, built out the FEEL/INTENSITY/STYLE/GROOVE grouping, implemented the mood gate penalty, and added diversity penalties for both artist and genre repetition. I also formatted the output as a table to make the recommendations easier to read at a glance.
+**Learned model** — a logistic regression trained separately for each demo profile using only that profile's liked vs skipped songs as the training set. The model learns 7 feature weights (genre match, mood similarity, tempo similarity, energy similarity, acoustic similarity, valence similarity, danceability similarity) from 8–10 labeled examples per profile. The trained weights are exported to JSON and re-run in the browser as a sigmoid function — no server required.
 
-Avoid code here. Pretend you are explaining the idea to a friend who does not program.
+The final score is `0.5 × learned_probability + 0.5 × heuristic_score`. Custom users get `1.0 × heuristic_score` (no model loaded).
+
+A guardrail in `rankSongs()` checks the top-5 after scoring. If average confidence drops below 0.34 or score spread collapses below 0.04, feedback influence is reduced and the event is logged.
 
 ---
 
-## 4. Data  
+## 4. Data
 
-Describe the dataset the model uses.  
-
-Prompts:  
-
-- How many songs are in the catalog  
-    There are 19 songs total in the catalog.
-- What genres or moods are represented  
-    Genres: Pop, Rock, Lofi, Jazz, K-Pop  
-    Moods: happy, sad, angry, chill, excited, intense, relaxed, moody, focused
-- Did you add or remove data  
-    I added data because there were not enough songs to give a clear picture of each song's character and to make meaningful comparisons between different users' tastes.
-- Are there parts of musical taste missing in the dataset  
-    I think language (e.g., lyrics in English vs. Korean vs. Spanish), content ratings, subgenres like death metal or bossa nova, and information about the emotional reputation of specific artists would all be helpful additions.
+- **Catalog:** 50 songs across 16 genres and 9 moods
+- **Genres represented:** pop (5), lofi (5), k-pop (4), rock (3), ambient (3), jazz (3), indie pop (3), folk (3), edm (3), r&b (3), classical (3), hip-hop (3), blues (3), synthwave (2), metal (2), electronic (2)
+- **Moods represented:** happy, sad, angry, chill, excited, intense, relaxed, moody, focused
+- **Song features:** genre, mood, energy (0–1), tempo (BPM), valence (0–1), danceability (0–1), acousticness (0–1)
+- **Training data:** 5 demo profiles, each with 8–10 seed feedback events (likes and skips), hand-authored to reflect distinct listening tastes
+- **What is missing:** lyrics, language, release decade, subgenre detail (e.g. death metal vs classic rock), artist reputation, and real listener diversity — all five profiles were designed by one developer
 
 ---
 
-## 5. Strengths  
+## 5. Strengths
 
-Where does your system seem to work well  
-
-Prompts:  
-
-- User types for which it gives reasonable results  
-    I would argue the output was reasonable for all five user profiles.
-- Any patterns you think your scoring captures correctly  
-    The persona that liked chill music (Alex) was spot-on, the jazz and lofi songs were scored well and the recommendations matched exactly what I would expect for that listener.
-- Cases where the recommendations matched your intuition  
-    Jordan, the rock persona, matched my intuition well. The system consistently chose harder, more passionate songs with high energy and intensity, which is exactly what that profile called for.
+- Per-profile training fixed the original same-5-songs bug. Alex (lofi/chill) and Maya (pop/excited) now share 0 songs; all 10 pairwise profile comparisons return ≤2 shared songs.
+- The mood gate correctly suppresses emotionally wrong songs for adversarial profiles. Riley (high energy + sad mood) gets folk/blues results rather than EDM, because the mood gate overrides the energy signal.
+- Scores are fully explainable — every number in the UI traces back to a specific feature, and the "Why" column names the dominant signals including when the learned model is the deciding factor.
+- Runs entirely in the browser with no backend. The logistic regression is exported to JSON and re-implemented as a sigmoid function in JavaScript.
 
 ---
 
-## 6. Limitations and Bias 
+## 6. Limitations and Biases
 
-Where the system struggles or behaves unfairly. 
+**Filter bubble effect.** The system rewards songs closest to what the user already likes. There is no discovery mechanism — a lofi listener will only ever see lofi and adjacent genres. Real platforms partially address this with collaborative filtering, which this system does not implement.
 
-Prompts:  
+**Mood coordinate simplification.** Emotions like "sad" or "angry" are mapped to two numbers on a valence/arousal grid. This erases cultural, personal, and contextual variation — someone listening to sad music to feel understood is in a different emotional state than someone who wants to cheer up, but the system treats both identically.
 
-- Features it does not consider  
-    The system completely ignores what other similar users like (collaborative filtering), which is one of the most powerful signals in real recommenders. It also suffers from a small catalog and limited data variety.
-- Genres or moods that are underrepresented 
-    Subgenres are underrepresented — the catalog has broad labels like "rock" but no distinction between indie rock, metal, or classic rock, which are very different listening experiences.
-- Cases where the system overfits to one preference 
-    Because the catalog has more chill songs than any other vibe, users who prefer that style have more directly matching options available, while others have fewer good matches to choose from.
-- Ways the scoring might unintentionally favor some users  
-    Users at the emotional extremes (very happy or very sad, very intense or very chill) are served better because the system has clear signal to match against. Users with a blended or middle-of-the-road taste are harder to score accurately, since their preferences do not pull strongly toward any one cluster of songs.
+**Synthetic training data.** All five profiles were designed by one developer. The learned models reflect those design choices, not real listener diversity. A system trained on actual user feedback would likely produce very different patterns.
+
+**Uneven genre coverage.** Pop and lofi have 5 songs each, but synthwave, metal, and electronic have only 2. A genre match in an underrepresented category carries less weight than it would in a larger, balanced catalog.
+
+**Potential misuse.** The `feedback_events` in `profiles.json` are unsealed — anyone with file access could seed artificial likes to guarantee specific songs always appear in the top-5. A commercial platform could exploit the same mechanism to promote sponsored content while appearing organic. The per-profile model files in `docs/data/models/` are also loaded by the browser with no integrity check; a malicious actor who replaced those files on the server could silently alter what any user sees. Prevention measures in place: feature breakdowns are visible in the UI (transparency), the "why" column explains every ranking (explainability), users can reset feedback at any time (user control). The missing safeguard is model file signature verification.
 
 ---
 
-## 7. Evaluation  
+## 7. Evaluation
 
-How you checked whether the recommender behaved as expected. 
+**Automated tests:** 19/19 pytest tests passing — per-profile model quality, valid probability range, determinism, profile differentiation.
 
-Prompts:  
+**Consistency checker** (`check_consistency.py`) — 10/10 checks passing:
+- Determinism: all 5 profiles return identical top-5 on repeated runs
+- Model quality: every per-profile model scores liked songs above skipped songs (margins +0.41 to +0.88)
+- Differentiation: all 10 pairwise profile comparisons return ≤2 shared songs
 
-- Which user profiles you tested  
-    I tested all 5 profiles. I ran all of them in simple mode and tested several in advanced mode as well.
-- What you looked for in the recommendations  
-    I looked for a clear rationale behind which songs were chosen, and for genre diversity within the top 5, especially in advanced mode, where the goal is the same emotional vibe but from a variety of artists and styles.
-- What surprised you  
-    I was surprised by how some of the same songs kept appearing across different users. I'm not sure whether that reflects genuine feature overlap in the catalog, or whether my own taste was unconsciously influencing how I judged which results were "correct."
-- Any simple tests or comparisons you ran  
-    I ran both scoring modes side by side on the same profiles and compared results — the recommended songs were similar but the reasoning differed in telling ways. I also created Riley, an intentionally contradictory profile (high energy + sad mood, EDM genre + likes acoustic), to see how the system handled a user it was never designed for.
+**Confidence:** Average model confidence across evaluated recommendations: 0.9408. These high values almost certainly reflect the small, clean synthetic dataset rather than genuine model quality — real user behavior would be far noisier.
 
-### Quantitative Reliability Snapshot
+**Guardrail validation:** The guardrail correctly reduces feedback influence when average top-5 confidence drops below 0.34 or score spread collapses below 0.04, and logs the event without crashing.
 
-- Automated tests: 7/7 passing (`pytest -q`)
-- Evaluation harness checks: 5/5 passing (`python -m src.evaluate`)
-- Average model confidence across evaluated recommendations: 0.941
-- Guardrail validation: invalid user profiles with missing required fields correctly raised `ValueError`
+**Human evaluation:** All five demo profiles and the custom profile mode were manually tested in the browser to verify that profile switching produces visibly different recommendations and that like/skip feedback updates rankings in real time.
 
-No need for numeric metrics unless you created some.
+**Most surprising finding:** Maya and Sam initially shared all 5 top recommendations despite being labelled "pop" and "k-pop." The root cause was in the data, not the labels — both had liked the same 4 songs and their energy/mood values were nearly identical. Fixing it required three changes together: expanding the catalog, separating their feedback histories, and removing "pop" from Sam's favorite_genres. No single change was sufficient.
 
 ---
 
-## 8. Future Work  
+## 8. Future Work
 
-Ideas for how you would improve the model next.  
-
-Prompts:  
-
-- Additional features or preferences  
-    I would incorporate data from other users, for example, a social following feature that lets users see what people they follow are listening to, which feeds into collaborative filtering.
-
-    I would also add a Discover mode that intentionally surfaces songs outside the user's normal patterns but that they might still enjoy, to break out of the recommendation echo chamber.
-
-    Blocking functionality so users can permanently remove a song or artist from their recommendations.
-- Better ways to explain recommendations 
-    Rather than showing the raw score calculation, I would replace it with a more human-readable explanation — something like "Because you loved the low-key jazz vibe of X, here's Y." The current explanation can be hard to parse for a non-technical user.
-- Improving diversity among the top results  
-    Expanding the diversity penalty to flag repeated subgenres and eras, not just repeated artists. Recommending four songs from the same era with the same production style is still repetitive even if the artists differ.
-- Handling more complex user tastes  
-    Adding finer-grained mood options and letting users set different "modes" for different situations (e.g., a workout mode vs. a focus mode) would better serve listeners whose tastes are contextual rather than fixed.
+- **Collaborative filtering:** incorporate what similar users liked, which is one of the most powerful real-world recommendation signals
+- **Discover mode:** intentionally surface songs outside the user's normal pattern to break the filter bubble
+- **Finer mood options and context modes:** workout, focus, wind-down — tastes are contextual, not fixed
+- **Richer explanations:** replace raw score breakdowns with natural language — "Because you loved the low-key vibe of X, here's Y"
+- **Model file integrity verification:** sign exported JSON weights and verify the signature in the browser before loading
+- **Larger and more balanced catalog:** more songs per genre, subgenre tagging, release decade, lyrics/language metadata
 
 ---
 
-## 9. Personal Reflection  
+## 9. Reflection and AI Collaboration
 
-A few sentences about your experience.  
+**What this project taught me about recommender systems:**
+A recommender is not making deep inferences about what a person enjoys — it is computing distances between numbers. The interesting engineering challenge is deciding *which* distances matter, how to weight them, and how to stop one strong signal (energy) from completely drowning out a weaker but important one (mood). The mood gate was the clearest example: without it, the system confidently recommended emotionally wrong songs because the numeric signals pointed the other way.
 
-Prompts:  
+The per-profile model work showed that training data scope is a design decision, not just a data collection problem. The global model was technically correct — it learned real patterns from real feedback — but the scope of that training (all users combined) made it answer the wrong question. Splitting by profile made the models less statistically robust but more semantically correct. That tradeoff — statistical power vs specificity — comes up in almost every real ML system.
 
-- What you learned about recommender systems 
-    There is a lot that goes into them, and it can feel like more data always means better results. That does raise real concerns about user autonomy and where the line is between helpful personalization and intrusive surveillance.
-- Something unexpected or interesting you discovered  
-    I thought it was interesting how the five user profiles were designed to be distinct, yet I still saw some song overlap between users with only partially similar tastes, and users at the polar ends of the spectrum shared no songs at all.
-- How this changed the way you think about music recommendation apps  
-    It made me wonder just how much data streaming services actually collect and how precisely they use it, since they are essentially getting an unfiltered window into each person's emotional state over time.
+**Collaboration with AI:**
+This project was built with significant AI assistance for scoring logic, model architecture, test generation, and debugging.
 
-### Misuse Risk and Mitigation
-
-- Potential misuse: The system could be used to reinforce narrow emotional patterns (for example repeatedly serving low-valence songs to a vulnerable user) if deployed without diversity or safety policies.
-- Mitigation in this project: artist/genre diversity penalties, explicit guardrail checks for malformed inputs, and transparent explanation text that surfaces recommendation rationale rather than hiding model behavior.
-
-### AI Collaboration Reflection (Required)
-
-- Helpful AI suggestion: AI-assisted refactoring to split scoring logic into `SimpleScorer` and `AdvancedScorer` classes made the architecture cleaner and easier to test.
-- Flawed AI suggestion: An early AI suggestion over-weighted energy for all profiles, which pushed high-energy songs too aggressively; this was corrected by using grouped dimensions and mood gating in advanced mode.
+- **Helpful:** When diagnosing why all profiles returned the same recommendations, the AI identified the root cause without being told where to look — the 0.7/0.3 global model weight meant the learned signal dominated regardless of which profile was active, and the global model had been trained on all profiles combined so it had no per-user signal at all. That was a non-obvious architectural bug.
+- **Flawed:** When asked to make the "Recommend Top 5" button do something noticeable, the AI proposed adding random noise (±0.15 offsets) to scores on each click. This would have made the button *appear* active by shuffling results randomly, but would have actively degraded recommendation quality — introducing noise into a system designed to be deterministic and explainable. The button was removed instead. The AI's suggestion prioritized visible activity over actual quality, which is a common failure mode worth watching for.

@@ -1,6 +1,8 @@
 # AI Music Recommendation Engine
 
 ---
+## Repo
+https://github.com/AlarisP/ai-music-recommendation-engine
 
 ## Original Project (Modules 1–3)
 
@@ -31,6 +33,15 @@ It matters because it demonstrates the full applied AI loop: structured data →
 | **Testing Layer** | `pytest` (19 tests) + `check_consistency.py` verify determinism, model quality, and profile differentiation |
 
 Demo profiles load their own trained model. Custom ("My Profile") users get heuristic-only scoring so no pre-existing bias influences a blank-slate user.
+
+### Where to see the AI working in the demo
+
+The logistic regression model is active and visible whenever a demo profile is selected:
+
+- **Score column** — every number is a 50/50 blend of the per-profile model's probability and the heuristic score. Switching from Alex to Maya changes the top 5 entirely (0 shared songs) because each profile's model was trained on different feedback.
+- **"Why" column** — when the model probability ≥ 0.75 the cell prints `"learned model strongly predicts a like"`. When it is between 0.5–0.75 it prints `"learned model sees a moderate fit"`. These phrases come directly from the model's output, not the heuristic.
+- **Like / Skip feedback** — clicking Like or Skip re-ranks songs in real time. The feedback adjuster updates the heuristic component; the model component stays fixed, so the re-ranking reflects both signals simultaneously.
+- **Terminal proof** — running `python check_consistency.py` prints per-profile liked vs skipped model probabilities and confirms all pairwise profile pairs return distinct recommendations.
 
 ---
 
@@ -129,7 +140,7 @@ genre: pop | mood: excited | energy: 0.92 | tempo: 132 BPM | acoustic: no
 | 2 | Heartbeat Drop | 0.974 |
 | 3 | Gym Hero | 0.968 |
 
-**Why it works:** Maya's model was trained on pop likes (songs 1, 5, 20, 21, 22) and k-pop skips (songs 19, 23). It now strongly prefers pop-specific tracks and avoids k-pop — producing a clearly different list from Sam, who gets k-pop in his top 5.
+**Why it works:** Maya's model was trained on pop likes (songs 1, 5, 20, 21, 22) and k-pop skips (songs 19, 23). It now strongly prefers pop-specific tracks and avoids k-pop, producing a clearly different list from Sam, who gets k-pop in his top 5.
 
 ---
 
@@ -171,7 +182,7 @@ The original system trained a single logistic regression on all five profiles co
 The 0.7/0.3 learned/heuristic split in the original code let the learned model dominate. Switching to 50/50 means profile-specific heuristic signals (genre, mood, acoustic preference) have equal influence alongside the model. Custom users get no learned model at all so their blank-slate experience is entirely driven by what they set on the sliders, no inherited bias.
 
 **Logistic regression over a neural network.**
-Logistic regression coefficients are human-readable, the model can be serialized to a small JSON file the browser can load directly, and training takes milliseconds. A neural network would offer no real advantage on 19 songs and 8 training examples per profile.
+Logistic regression coefficients are human-readable, the model can be serialized to a small JSON file the browser can load directly, and training takes milliseconds. A neural network would offer no real advantage on 50 songs and 8 training examples per profile.
 
 **Guardrails as a hard constraint, not a soft suggestion.**
 If average top-5 confidence drops below 0.34 or score spread collapses below 0.04, the system reduces feedback cap and logs the event. This makes low-confidence conditions visible and recoverable rather than silently producing bad output.
@@ -183,13 +194,13 @@ The logistic regression is exported to JSON and re-implemented in plain JavaScri
 
 ## Testing Summary
 
-**13/13 pytest tests passed. 5/5 reliability checks passed. Average model confidence across evaluated recommendations: 0.9408. 9/10 consistency checks passed — the system struggled only when two profiles had nearly identical feedback histories (Maya vs Sam), causing full top-5 overlap.**
+**19/19 pytest tests passed. 5/5 reliability checks passed. Average model confidence across evaluated recommendations: 0.9408. 10/10 consistency checks passed.**
 
 ### Reliability mechanisms used
 
 | Mechanism | Implementation |
 |---|---|
-| Automated tests | `pytest` — 13 tests covering per-profile model quality, valid probability range, determinism, and profile differentiation |
+| Automated tests | `pytest` — 19 tests covering per-profile model quality, valid probability range, determinism, and profile differentiation |
 | Consistency checker | `check_consistency.py` — 3 checks: determinism, model quality (liked > skipped), profile differentiation |
 | Confidence scoring | Every song gets a 0.0–1.0 score; `logs/evaluation_report.json` records average confidence (0.9408) per run; guardrails trigger when avg score < 0.34 |
 | Logging and error handling | `logs/recommender.log` records scoring errors, skipped songs, and out-of-range values; `ValueError` is raised and logged when required profile fields are missing |
@@ -198,8 +209,8 @@ The logistic regression is exported to JSON and re-implemented in plain JavaScri
 ### Consistency checker results
 
 - Check 1 — Determinism: **5/5 PASS** — all profiles return identical top-5 on repeated runs
-- Check 2 — Model quality: **5/5 PASS** — every per-profile model scores that profile's liked songs above skipped songs (margins +0.56 to +0.88)
-- Check 3 — Differentiation: **9/10 PASS** — Maya vs Sam share all 5 songs (known limitation, see below)
+- Check 2 — Model quality: **5/5 PASS** — every per-profile model scores that profile's liked songs above skipped songs (margins +0.41 to +0.88)
+- Check 3 — Differentiation: **10/10 PASS** — all profile pairs return ≤2 shared songs; Maya vs Sam share 2/5 (Block Party, Neon Surge — legitimate high-energy crossover)
 
 ### What worked
 - Per-profile training fixed the original same-5-songs bug for profiles with distinct taste signatures
@@ -207,71 +218,24 @@ The logistic regression is exported to JSON and re-implemented in plain JavaScri
 - Guardrails catch low-confidence rankings and log them without crashing
 - Confidence scores were high and consistent across all three evaluated profiles (0.83–0.999)
 
-### What did not work
-- Maya and Sam are too similar (both excited/high-energy/pop-adjacent with overlapping liked songs) for the differentiator to pass. Their feedback histories overlap on 4 songs, so their models converge on the same catalog subset. More diverse seeded feedback or a larger song catalog would resolve this.
-- The learned model is trained on synthetic feedback data. Confidence values are high (0.83–0.95) but this reflects the small, clean dataset — real user behavior would be far noisier.
+### What did not work (and was fixed)
+- Maya and Sam initially shared all 5 top recommendations. The root cause was overlapping liked songs and nearly identical energy/mood values — the system could not distinguish "pop" from "k-pop" numerically. Fixed by: expanding the catalog to 50 songs with genre-specific entries, updating Maya's feedback to like pop and skip k-pop, updating Sam's feedback to like k-pop and skip pop, and removing "pop" from Sam's favorite_genres so pop songs score 0 for genre match. After these changes Maya vs Sam share only 2/5 songs (legitimate high-energy crossover), and all 10 pairwise comparisons pass.
+- The learned model is trained on synthetic feedback data. Confidence values are high but this reflects the small, clean dataset — real user behavior would be far noisier.
 
 ### What I learned from testing
-Writing the consistency checker revealed the Maya/Sam overlap problem that no unit test would have caught. Determinism testing confirmed there was no hidden randomness in the pipeline. The model quality check (liked > skipped margin) gave a concrete, numeric measure of whether per-profile training was actually working — which it was, by a significant margin.
+Writing the consistency checker revealed the Maya/Sam overlap problem that no unit test would have caught — and then guided the exact fixes needed to resolve it. Determinism testing confirmed there was no hidden randomness in the pipeline. The model quality check (liked > skipped margin) gave a concrete, numeric measure of whether per-profile training was actually working, which it was, by margins of +0.41 to +0.88 across all five profiles.
 
 ---
 
 ## Responsible AI Reflection
 
-### Limitations and biases in the system
-
-The most significant bias is the **filter bubble effect**. Because the system rewards songs closest to what a user already stated they like, it has no mechanism to surface genuinely new or surprising music. A user who says they like lofi will only ever see lofi and adjacent genres — the system will never challenge that preference or help them discover something outside it. Real streaming platforms partially address this with collaborative filtering ("users like you also enjoyed"), which this system does not implement.
-
-The **mood coordinate system** is a simplification. Mapping emotions like "sad" or "angry" to two numbers on a valence/arousal grid erases cultural, personal, and contextual variation in what those words mean. Someone listening to sad music to feel understood is in a different state than someone who wants to cheer up — the system treats both identically.
-
-The **synthetic training data** is a structural bias. All five profiles were designed by a developer with specific musical intuitions. The learned models reflect those design choices, not real listener diversity. A system trained on actual user feedback would likely surface very different patterns.
-
-Finally, the **19-song catalog** makes genre scoring near-useless for most profiles — 14 of 16 genres have only one song, so a genre match is mostly luck rather than a meaningful signal.
-
----
-
-### Could this AI be misused?
-
-A music recommender has limited direct harm potential, but two misuse vectors are worth noting.
-
-First, the `feedback_events` in `profiles.json` are unsealed — anyone with access to the files could seed a profile's history with artificial likes for specific songs to guarantee those songs always appear in the top-5. A commercial platform using this architecture could exploit the same mechanism to promote sponsored content while appearing to surface organic recommendations.
-
-Second, the per-profile model files in `docs/data/models/` are loaded directly by the browser with no integrity check. A malicious actor who could replace those files on the server could silently alter what any user sees.
-
-Prevention measures already in place: scores and feature breakdowns are visible to the user in the UI (transparency), the "why" column explains every ranking (explainability), and users can reset their feedback at any time (user control). The missing safeguard is model file integrity verification — a production system would sign the model files and verify the signature before loading.
-
----
-
-### What surprised me during reliability testing
-
-The Maya vs Sam differentiation failure was the most surprising result. Maya is a pop profile and Sam is a k-pop profile — on paper they sound different. But when the consistency checker ran, they shared all 5 top recommendations. The root cause was in the feedback data, not the profiles: both had liked the same 4 songs and their energy and mood values were nearly identical. The profiles looked diverse at the label level but were functionally the same to the scoring system.
-
-This was a useful reminder that human-readable labels ("pop" vs "k-pop") do not automatically translate into meaningful numeric separation. The system only knows what the numbers say.
-
-The second surprise was how high the confidence scores were (average 0.9408). On a 19-song catalog with 8 training examples per model, that level of confidence almost certainly reflects overfitting to clean synthetic data rather than genuine model quality. A well-calibrated model on real-world data would likely show much more uncertainty.
-
----
-
-### Collaboration with AI during this project
-
-This project was built with significant AI assistance throughout. The AI helped write scoring logic, design the per-profile model architecture, generate test cases, and debug the same-5-songs issue.
-
-**One instance where the AI was genuinely helpful:** When diagnosing why all profiles returned the same recommendations, the AI identified the root cause without being explicitly told where to look — the 0.7/0.3 global model weight meant the learned signal dominated regardless of which profile was active, and the global model had been trained on all profiles combined so it had no per-user signal at all. That was a non-obvious architectural bug that would have taken much longer to find manually.
-
-**One instance where the AI's suggestion was flawed:** When asked to make the "Recommend Top 5" button do something noticeable, the AI proposed adding random noise (±0.15 offsets) to song scores on each click. This would have made the button *appear* to do something by shuffling results randomly, but it would have actively made the recommendations worse — introducing noise into a system designed to be deterministic and explainable. The button was removed instead, which was the correct call. The AI's suggestion prioritized visible activity over actual quality, which is a common failure mode worth watching for.
-
-Building this project made the gap between "AI as magic" and "AI as math on structured data" concrete. A recommender is not making deep inferences about what a person enjoys — it is computing distances between numbers. The interesting engineering challenge is deciding *which* distances matter, how to weight them, and how to stop one strong signal (like energy) from completely drowning out a weaker but important one (like mood). The mood gate was the clearest example of this: without it, the system confidently recommended emotionally wrong songs because the numeric signals pointed the other way.
-
-The per-profile model work taught me that training data scope is a design decision, not just a data collection problem. The global model was technically correct — it learned real patterns from real feedback — but the scope of that training (all users combined) made it answer the wrong question. Splitting the data by profile made the models less statistically robust but more semantically correct. That tradeoff — statistical power versus specificity — comes up in almost every real ML system, and seeing it play out concretely on 19 songs and 8 training examples made it much easier to reason about than any textbook explanation.
+Full reflection covering limitations, biases, misuse potential, testing surprises, and AI collaboration is in [model_card.md](model_card.md) (sections 6, 7, and 9).
 
 ---
 
 ## Loom Walkthrough
 
-Add your walkthrough link here: `LOOM_LINK_HERE`
-
-The video should show: 2–3 profile switches, like/skip feedback affecting rankings, guardrail log output, and the consistency checker running.
-avior, reliability/guardrail behavior, and clear outputs.
+https://www.loom.com/share/1c9d57bf3e224aafafeb861556d910ef
 
 ## Portfolio Reflection Snippet
 
